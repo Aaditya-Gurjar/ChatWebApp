@@ -7,7 +7,7 @@ const mongoose = require("mongoose");
 const app = express();
 
 const corsOptions = {
-	origin: process.env.FRONTEND_URL,
+	origin: true, // Allow all origins
 	methods: ["GET", "POST", "DELETE"],
 	allowedHeaders: ["Content-Type", "Authorization"],
 	credentials: true,
