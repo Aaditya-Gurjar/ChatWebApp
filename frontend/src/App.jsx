@@ -72,7 +72,7 @@ const Applayout = () => {
                 {isNotificationBox && <NotificationBox />}
             </div>
             {isLoading && <Loading />}
-            <Footer />
+            {/* <Footer /> */}
         </div>
     );
 };
