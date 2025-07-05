@@ -7,13 +7,13 @@ const mongoose = require("mongoose");
 const app = express();
 
 const corsOptions = {
-	origin: true, // Allow all origins
+	origin: process.env.FRONTEND_URL,
 	methods: ["GET", "POST", "DELETE"],
 	allowedHeaders: ["Content-Type", "Authorization"],
 	credentials: true,
 };
 
-app.use(cors(corsOptions));
+app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 const PORT = process.env.PORT || 3000;

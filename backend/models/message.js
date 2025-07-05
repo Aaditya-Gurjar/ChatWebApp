@@ -9,13 +9,16 @@ const messageSchema = mongoose.Schema(
 		},
 		message: {
 			type: String,
-			required: true,
 			trim: true,
 		},
 		chat: {
 			type: mongoose.Schema.Types.ObjectId,
 			ref: "Chat",
 			required: true,
+		},
+		image: {
+			type: String,
+			trim: true,
 		},
 	},
 	{

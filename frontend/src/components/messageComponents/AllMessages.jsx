@@ -2,6 +2,7 @@ import React, { Fragment, useEffect, useRef, useState } from "react";
 import { useSelector } from "react-redux";
 import { VscCheckAll } from "react-icons/vsc";
 import { CgChevronDoubleDown } from "react-icons/cg";
+import { MdOutlineClose } from "react-icons/md";
 import {
     SimpleDateAndTime,
     SimpleDateMonthDay,
@@ -14,6 +15,7 @@ const AllMessages = ({ allMessage }) => {
     const isTyping = useSelector((store) => store?.condition?.isTyping);
 
     const [scrollShow, setScrollShow] = useState(true);
+    const [zoomImage, setZoomImage] = useState(null);
     // Handle Chat Box Scroll Down
     const handleScrollDownChat = () => {
         if (chatBox.current) {
@@ -115,9 +117,20 @@ const AllMessages = ({ allMessage }) => {
                                                 : "pr-12"
                                         }`}
                                     >
-                                        <span className="">
-                                            {message?.message}
-                                        </span>
+                                        {/* Show image if message is empty and image exists */}
+                                        {(!message?.message && message?.image) ? (
+                                            <img
+                                                src={message.image}
+                                                alt="media"
+                                                className="max-w-[250px] max-h-[300px] w-auto h-auto rounded-md object-contain border border-slate-400 bg-black/10 cursor-zoom-in"
+                                                style={{ width: '100%', height: 'auto' }}
+                                                onClick={() => setZoomImage(message.image)}
+                                            />
+                                        ) : (
+                                            <span className="">
+                                                {message?.message}
+                                            </span>
+                                        )}
                                         <span
                                             className="text-[11px] font-light absolute bottom-1 right-2 flex items-end gap-1.5"
                                             title={SimpleDateAndTime(
@@ -147,6 +160,24 @@ const AllMessages = ({ allMessage }) => {
                     </div>
                 )}
             </div>
+            {zoomImage && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-80">
+                    <img
+                        src={zoomImage}
+                        alt="zoomed"
+                        className="max-w-[90vw] max-h-[90vh] rounded-md object-contain shadow-lg animate-zoomIn"
+                        style={{ cursor: 'zoom-out' }}
+                        onClick={() => setZoomImage(null)}
+                    />
+                    <button
+                        className="absolute top-6 right-8 text-white text-3xl bg-black bg-opacity-60 rounded-full p-2 hover:bg-opacity-90"
+                        onClick={() => setZoomImage(null)}
+                        title="Close"
+                    >
+                        <MdOutlineClose />
+                    </button>
+                </div>
+            )}
         </>
     );
 };
