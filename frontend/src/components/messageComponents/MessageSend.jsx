@@ -236,6 +236,9 @@ const MessageSend = ({ chatId }) => {
 	const handleSendMessage = async () => {
 		if (!newMessage.trim() && !mediaFile.current?.files[0]) return;
 
+		// Clear message state immediately on send button click
+		setMessage("");
+
 		dispatch(setSendLoading(true));
 		const token = localStorage.getItem("token");
 
