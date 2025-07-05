@@ -236,9 +236,8 @@ const MessageSend = ({ chatId }) => {
 	const handleSendMessage = async () => {
 		if (!newMessage.trim() && !mediaFile.current?.files[0]) return;
 
-		// Clear message state immediately on send button click
-		setMessage("");
-
+		const messageToSend = newMessage; // Save current message
+		setMessage(""); // Clear input immediately so user can type next message
 		dispatch(setSendLoading(true));
 		const token = localStorage.getItem("token");
 
@@ -247,7 +246,7 @@ const MessageSend = ({ chatId }) => {
 			if (mediaFile.current?.files[0]) {
 				const formData = new FormData();
 				formData.append("image", mediaFile.current.files[0]);
-				formData.append("message", newMessage.trim());
+				formData.append("message", messageToSend.trim());
 				formData.append("chatId", chatId);
 
 				response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/message/upload`, {
@@ -265,7 +264,7 @@ const MessageSend = ({ chatId }) => {
 						Authorization: `Bearer ${token}`,
 					},
 					body: JSON.stringify({
-						message: newMessage.trim(),
+						message: messageToSend.trim(),
 						chatId: chatId,
 					}),
 				});
@@ -276,7 +275,6 @@ const MessageSend = ({ chatId }) => {
 			dispatch(addNewMessage(json?.data));
 			socket.emit("new message", json.data);
 
-			setMessage("");
 			clearMediaFile();
 			socket.emit("stop typing", selectedChat._id);
 		} catch (err) {
