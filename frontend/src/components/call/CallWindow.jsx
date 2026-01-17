@@ -15,6 +15,7 @@ const CallWindow = () => {
     const { localStream, remoteStream } = useCall();
     const localVideoRef = useRef(null);
     const remoteVideoRef = useRef(null);
+    const remoteAudioRef = useRef(null); // For audio playback
 
     // Attach local stream to video element
     useEffect(() => {
@@ -23,17 +24,33 @@ const CallWindow = () => {
         }
     }, [localStream]);
 
-    // Attach remote stream to video element
+    // Attach remote stream to video/audio elements
     useEffect(() => {
-        if (remoteVideoRef.current && remoteStream) {
-            remoteVideoRef.current.srcObject = remoteStream;
+        if (remoteStream) {
+            console.log("🔊 ATTACHING REMOTE STREAM:", remoteStream);
+
+            // For video calls, attach to video element
+            if (remoteVideoRef.current && callType === "video") {
+                remoteVideoRef.current.srcObject = remoteStream;
+                console.log("🔊 ATTACHED TO VIDEO ELEMENT");
+            }
+
+            // Always attach to audio element for reliable playback
+            if (remoteAudioRef.current) {
+                remoteAudioRef.current.srcObject = remoteStream;
+                remoteAudioRef.current.play().catch((err) => {
+                    console.error("🔊 Audio play failed:", err);
+                });
+                console.log("🔊 ATTACHED TO AUDIO ELEMENT");
+            }
         }
-    }, [remoteStream]);
+    }, [remoteStream, callType]);
 
     if (callStatus === "idle") return null;
 
     const otherUser = activeCall?.isOutgoing ? recipient : caller;
-    const isConnecting = callStatus === "initiating" || callStatus === "connecting";
+    const isConnecting =
+        callStatus === "initiating" || callStatus === "connecting";
 
     return (
         <div className="fixed inset-0 bg-black z-50 flex flex-col">
@@ -52,8 +69,8 @@ const CallWindow = () => {
                             src={otherUser?.image}
                             alt={otherUser?.firstName}
                             className={`w-32 h-32 rounded-full mb-4 border-4 ${isConnecting
-                                ? "border-yellow-500 animate-pulse"
-                                : "border-blue-500"
+                                    ? "border-yellow-500 animate-pulse"
+                                    : "border-blue-500"
                                 }`}
                         />
                         <h2 className="text-3xl font-bold text-white mb-2">
@@ -62,7 +79,9 @@ const CallWindow = () => {
                         <p className="text-slate-300 text-lg">
                             {isConnecting ? (
                                 <span className="animate-pulse">
-                                    {callStatus === "initiating" ? "Calling..." : "Connecting..."}
+                                    {callStatus === "initiating"
+                                        ? "Calling..."
+                                        : "Connecting..."}
                                 </span>
                             ) : (
                                 <CallTimer />
@@ -85,6 +104,14 @@ const CallWindow = () => {
                     </div>
                 )}
             </div>
+
+            {/* Hidden audio element for remote stream (ensures audio plays) */}
+            <audio
+                ref={remoteAudioRef}
+                autoPlay
+                playsInline
+                style={{ display: "none" }}
+            />
 
             {/* Call Controls */}
             <CallControls />
