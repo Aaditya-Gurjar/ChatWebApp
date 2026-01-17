@@ -38,6 +38,9 @@ export const useCallManager = () => {
 
     // Ringtone helpers
     const playRingtone = useCallback(() => {
+        // Ringtone disabled to avoid 404 errors
+        // Uncomment when ringtone.mp3 is added to public/sounds/
+        /*
         try {
             ringtoneAudioRef.current = new Audio("/sounds/ringtone.mp3");
             ringtoneAudioRef.current.loop = true;
@@ -47,6 +50,7 @@ export const useCallManager = () => {
         } catch (err) {
             console.log("Ringtone error:", err);
         }
+        */
     }, []);
 
     const stopRingtone = useCallback(() => {
