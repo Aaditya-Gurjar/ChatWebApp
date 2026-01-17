@@ -142,6 +142,55 @@ io.on("connection", (socket) => {
 	socket.on("delete chat", deleteChatHandler);
 	socket.on("chat created", chatCreateChatHandler);
 
+	// ============ CALL EVENTS ============
+
+	// User initiates a call
+	socket.on("call:initiate", ({ to, from, callId, type, offer }) => {
+		console.log(`Call initiated from ${from._id} to ${to}`);
+		// Forward to recipient
+		socket.to(to).emit("call:incoming", {
+			from,
+			callId,
+			type,
+			offer,
+		});
+	});
+
+	// User accepts call
+	socket.on("call:accept", ({ to, answer, callId }) => {
+		console.log(`Call ${callId} accepted`);
+		// Forward answer to caller
+		socket.to(to).emit("call:accepted", {
+			answer,
+			callId,
+		});
+	});
+
+	// User rejects call
+	socket.on("call:reject", ({ to, callId }) => {
+		console.log(`Call ${callId} rejected`);
+		socket.to(to).emit("call:rejected", { callId });
+	});
+
+	// Exchange ICE candidates
+	socket.on("call:ice-candidate", ({ to, candidate, callId }) => {
+		socket.to(to).emit("call:ice-candidate", {
+			candidate,
+			callId,
+		});
+	});
+
+	// End call
+	socket.on("call:end", ({ to, callId }) => {
+		console.log(`Call ${callId} ended`);
+		socket.to(to).emit("call:ended", { callId });
+	});
+
+	// User is busy (already on another call)
+	socket.on("call:busy", ({ to, callId }) => {
+		socket.to(to).emit("call:busy", { callId });
+	});
+
 	socket.on("disconnect", () => {
 		console.log("User disconnected:", socket.id);
 		socket.off("setup", setupHandler);
@@ -154,3 +203,4 @@ io.on("connection", (socket) => {
 		socket.off("chat created", chatCreateChatHandler);
 	});
 });
+

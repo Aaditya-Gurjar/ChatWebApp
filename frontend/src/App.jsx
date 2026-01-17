@@ -14,6 +14,8 @@ import ProfileDetail from "./components/ProfileDetail";
 import Loading from "./components/loading/Loading";
 import GroupChatBox from "./components/chatComponents/GroupChatBox";
 import NotificationBox from "./components/NotificationBox";
+import CallWindow from "./components/call/CallWindow";
+import IncomingCallModal from "./components/call/IncomingCallModal";
 // import GroupChatBox from "./components/GroupChatBox";
 
 const Applayout = () => {
@@ -61,7 +63,7 @@ const Applayout = () => {
                     border: "1px solid #dadadaaa",
                     textTransform: "capitalize",
                 }}
-                // transition:Bounce
+            // transition:Bounce
             />
             <Header />
             <div className="h-16 md:h-20"></div>
@@ -72,7 +74,8 @@ const Applayout = () => {
                 {isNotificationBox && <NotificationBox />}
             </div>
             {isLoading && <Loading />}
-           
+            <CallWindow />
+            <IncomingCallModal />
         </div>
     );
 };

@@ -1,0 +1,95 @@
+import React, { useEffect, useRef } from "react";
+import { useSelector } from "react-redux";
+import { useCallManager } from "../../hooks/useCallManager";
+import CallControls from "./CallControls";
+import CallTimer from "./CallTimer";
+
+const CallWindow = () => {
+    const {
+        callStatus,
+        callType,
+        caller,
+        recipient,
+        activeCall,
+    } = useSelector((store) => store.call);
+    const { localStream, remoteStream } = useCallManager();
+    const localVideoRef = useRef(null);
+    const remoteVideoRef = useRef(null);
+
+    // Attach local stream to video element
+    useEffect(() => {
+        if (localVideoRef.current && localStream) {
+            localVideoRef.current.srcObject = localStream;
+        }
+    }, [localStream]);
+
+    // Attach remote stream to video element
+    useEffect(() => {
+        if (remoteVideoRef.current && remoteStream) {
+            remoteVideoRef.current.srcObject = remoteStream;
+        }
+    }, [remoteStream]);
+
+    if (callStatus === "idle") return null;
+
+    const otherUser = activeCall?.isOutgoing ? recipient : caller;
+    const isConnecting = callStatus === "initiating" || callStatus === "connecting";
+
+    return (
+        <div className="fixed inset-0 bg-black z-50 flex flex-col">
+            {/* Remote Video/Avatar */}
+            <div className="flex-1 relative">
+                {callType === "video" && remoteStream ? (
+                    <video
+                        ref={remoteVideoRef}
+                        autoPlay
+                        playsInline
+                        className="w-full h-full object-cover"
+                    />
+                ) : (
+                    <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-slate-800 to-slate-900">
+                        <img
+                            src={otherUser?.image}
+                            alt={otherUser?.firstName}
+                            className={`w-32 h-32 rounded-full mb-4 border-4 ${isConnecting
+                                    ? "border-yellow-500 animate-pulse"
+                                    : "border-blue-500"
+                                }`}
+                        />
+                        <h2 className="text-3xl font-bold text-white mb-2">
+                            {otherUser?.firstName} {otherUser?.lastName}
+                        </h2>
+                        <p className="text-slate-300 text-lg">
+                            {isConnecting ? (
+                                <span className="animate-pulse">
+                                    {callStatus === "initiating" ? "Calling..." : "Connecting..."}
+                                </span>
+                            ) : (
+                                <CallTimer />
+                            )}
+                        </p>
+                    </div>
+                )}
+
+                {/* Local Video (Picture-in-Picture) */}
+                {callType === "video" && localStream && (
+                    <div className="absolute top-4 right-4 w-32 h-40 bg-black rounded-lg overflow-hidden border-2 border-white shadow-lg">
+                        <video
+                            ref={localVideoRef}
+                            autoPlay
+                            playsInline
+                            muted
+                            className="w-full h-full object-cover"
+                            style={{ transform: "scaleX(-1)" }} // Mirror effect
+                        />
+                    </div>
+                )}
+            </div>
+
+            {/* Call Controls */}
+            <CallControls />
+        </div>
+    );
+};
+
+export default CallWindow;

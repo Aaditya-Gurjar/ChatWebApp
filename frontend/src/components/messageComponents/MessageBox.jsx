@@ -13,6 +13,8 @@ import { addSelectedChat } from "../../redux/slices/myChatSlice";
 import getChatName, { getChatImage } from "../../utils/getChatName";
 import ChatDetailsBox from "../chatDetails/ChatDetailsBox";
 import { CiMenuKebab } from "react-icons/ci";
+import { MdCall, MdVideocam } from "react-icons/md";
+import { useCallManager } from "../../hooks/useCallManager";
 import { toast } from "react-toastify";
 import socket from "../../socket/socket";
 
@@ -29,6 +31,10 @@ const MessageBox = ({ chatId }) => {
 	const allMessage = useSelector((store) => store?.message?.message);
 	const selectedChat = useSelector((store) => store?.myChat?.selectedChat);
 	const authUserId = useSelector((store) => store?.auth?._id);
+	const { startCall } = useCallManager();
+
+	// Get the other user in 1-on-1 chat
+	const otherUser = selectedChat?.users?.find((u) => u._id !== authUserId);
 
 	useEffect(() => {
 		const getMessage = (chatId) => {
@@ -106,17 +112,43 @@ const MessageBox = ({ chatId }) => {
 						{getChatName(selectedChat, authUserId)}
 					</h1>
 				</div>
-				<CiMenuKebab
-					fontSize={18}
-					title="Menu"
-					className="cursor-pointer"
-				/>
+				<div className="flex items-center gap-2">
+					{/* Call buttons - only show for 1-on-1 chats */}
+					{!selectedChat?.isGroupChat && otherUser && (
+						<>
+							<button
+								onClick={(e) => {
+									e.stopPropagation();
+									startCall(otherUser, "audio");
+								}}
+								className="p-2 hover:bg-slate-700 rounded-full transition-all"
+								title="Audio Call"
+							>
+								<MdCall fontSize={20} />
+							</button>
+							<button
+								onClick={(e) => {
+									e.stopPropagation();
+									startCall(otherUser, "video");
+								}}
+								className="p-2 hover:bg-slate-700 rounded-full transition-all"
+								title="Video Call"
+							>
+								<MdVideocam fontSize={20} />
+							</button>
+						</>
+					)}
+					<CiMenuKebab
+						fontSize={18}
+						title="Menu"
+						className="cursor-pointer"
+					/>
+				</div>
 			</div>
 			{isChatDetailsBox && (
 				<div
-					className={`h-[60vh] w-full max-w-96 absolute top-0 left-0 z-20 p-1 ${
-						isExiting ? "box-exit" : "box-enter"
-					}`}
+					className={`h-[60vh] w-full max-w-96 absolute top-0 left-0 z-20 p-1 ${isExiting ? "box-exit" : "box-enter"
+						}`}
 				>
 					<div
 						ref={chatDetailsBox}
