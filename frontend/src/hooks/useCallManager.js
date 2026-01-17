@@ -92,22 +92,34 @@ export const useCallManager = () => {
                 console.log("🔵 PEER CREATED (Caller):", newPeer);
 
                 // Handle peer events
-                newPeer.on("signal", (offer) => {
-                    console.log("🔵 SIGNAL EVENT (Offer generated):", offer);
-                    // Send offer to recipient via socket
-                    socket.emit("call:initiate", {
-                        to: recipientUser._id,
-                        from: {
-                            _id: authUser._id,
-                            firstName: authUser.firstName,
-                            lastName: authUser.lastName,
-                            image: authUser.image,
-                        },
-                        callId,
-                        type,
-                        offer,
-                    });
-                    console.log("🔵 EMITTED call:initiate TO:", recipientUser._id);
+                newPeer.on("signal", (data) => {
+                    console.log("🔵 SIGNAL EVENT:", data);
+
+                    if (data.type === "offer") {
+                        console.log("🔵 SENDING OFFER");
+                        // Send offer to recipient via socket
+                        socket.emit("call:initiate", {
+                            to: recipientUser._id,
+                            from: {
+                                _id: authUser._id,
+                                firstName: authUser.firstName,
+                                lastName: authUser.lastName,
+                                image: authUser.image,
+                            },
+                            callId,
+                            type,
+                            offer: data,
+                        });
+                        console.log("🔵 EMITTED call:initiate TO:", recipientUser._id);
+                    } else if (data.type === "candidate") {
+                        console.log("🔵 SENDING ICE CANDIDATE");
+                        // Send ICE candidate separately
+                        socket.emit("call:ice-candidate", {
+                            to: recipientUser._id,
+                            candidate: data,
+                            callId,
+                        });
+                    }
                 });
 
                 newPeer.on("stream", (stream) => {
@@ -210,15 +222,27 @@ export const useCallManager = () => {
             newPeer.signal(incomingCall.offer);
 
             // Handle peer events
-            newPeer.on("signal", (answer) => {
-                console.log("🟢 SIGNAL EVENT (Answer generated):", answer);
-                // Send answer to caller
-                socket.emit("call:accept", {
-                    to: incomingCall.from._id,
-                    answer,
-                    callId: incomingCall.callId,
-                });
-                console.log("🟢 EMITTED call:accept TO:", incomingCall.from._id);
+            newPeer.on("signal", (data) => {
+                console.log("🟢 SIGNAL EVENT:", data);
+
+                if (data.type === "answer") {
+                    console.log("🟢 SENDING ANSWER");
+                    // Send answer to caller
+                    socket.emit("call:accept", {
+                        to: incomingCall.from._id,
+                        answer: data,
+                        callId: incomingCall.callId,
+                    });
+                    console.log("🟢 EMITTED call:accept TO:", incomingCall.from._id);
+                } else if (data.type === "candidate") {
+                    console.log("🟢 SENDING ICE CANDIDATE");
+                    // Send ICE candidate separately
+                    socket.emit("call:ice-candidate", {
+                        to: incomingCall.from._id,
+                        candidate: data,
+                        callId: incomingCall.callId,
+                    });
+                }
             });
 
             newPeer.on("stream", (stream) => {
