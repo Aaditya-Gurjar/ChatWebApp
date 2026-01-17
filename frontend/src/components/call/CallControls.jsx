@@ -1,4 +1,3 @@
-```
 import React from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useCall } from "../../context/CallContext";
@@ -34,11 +33,10 @@ const CallControls = () => {
             {/* Mute/Unmute */}
             <button
                 onClick={handleToggleMute}
-                className={`rounded - full p - 4 transition - all text - white ${
-    isMuted
-        ? "bg-red-600 hover:bg-red-700"
-        : "bg-slate-700 hover:bg-slate-600"
-} `}
+                className={`rounded-full p-4 transition-all text-white ${isMuted
+                        ? "bg-red-600 hover:bg-red-700"
+                        : "bg-slate-700 hover:bg-slate-600"
+                    }`}
                 title={isMuted ? "Unmute" : "Mute"}
             >
                 {isMuted ? <MdMicOff fontSize={24} /> : <MdMic fontSize={24} />}
@@ -48,11 +46,10 @@ const CallControls = () => {
             {callType === "video" && (
                 <button
                     onClick={handleToggleVideo}
-                    className={`rounded - full p - 4 transition - all text - white ${
-    !isVideoEnabled
-    ? "bg-red-600 hover:bg-red-700"
-    : "bg-slate-700 hover:bg-slate-600"
-} `}
+                    className={`rounded-full p-4 transition-all text-white ${!isVideoEnabled
+                            ? "bg-red-600 hover:bg-red-700"
+                            : "bg-slate-700 hover:bg-slate-600"
+                        }`}
                     title={isVideoEnabled ? "Turn off camera" : "Turn on camera"}
                 >
                     {isVideoEnabled ? (
