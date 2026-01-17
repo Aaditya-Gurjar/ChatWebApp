@@ -16,5 +16,4 @@ export const iceServers = {
         //   credential: 'your-password',
         // },
     ],
-    iceCandidatePoolSize: 10,
 };
