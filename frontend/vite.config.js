@@ -8,13 +8,15 @@ export default defineConfig({
   plugins: [react()],
   define: {
     global: 'globalThis',
+    'process.env': {},
   },
   resolve: {
     alias: {
-      buffer: 'buffer',
+      buffer: 'buffer/',
       process: 'process/browser',
       stream: 'stream-browserify',
-      util: 'util',
+      util: 'util/',
+      events: 'events/',
     },
   },
   optimizeDeps: {
@@ -29,6 +31,27 @@ export default defineConfig({
         }),
         NodeModulesPolyfillPlugin(),
       ],
+    },
+  },
+  build: {
+    rollupOptions: {
+      plugins: [
+        // Inject polyfills in production build
+        {
+          name: 'inject-process',
+          transform(code, id) {
+            if (id.includes('node_modules')) {
+              return code.replace(
+                /require\(['"]process['"]\)/g,
+                'import("process/browser")'
+              );
+            }
+          },
+        },
+      ],
+    },
+    commonjsOptions: {
+      transformMixedEsModules: true,
     },
   },
 })
