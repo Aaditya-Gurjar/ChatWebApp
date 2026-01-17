@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import { useSelector } from "react-redux";
-import { useCallManager } from "../../hooks/useCallManager";
+import { useCall } from "../../context/CallContext";
 import CallControls from "./CallControls";
 import CallTimer from "./CallTimer";
 
@@ -12,7 +12,7 @@ const CallWindow = () => {
         recipient,
         activeCall,
     } = useSelector((store) => store.call);
-    const { localStream, remoteStream } = useCallManager();
+    const { localStream, remoteStream } = useCall();
     const localVideoRef = useRef(null);
     const remoteVideoRef = useRef(null);
 
@@ -52,8 +52,8 @@ const CallWindow = () => {
                             src={otherUser?.image}
                             alt={otherUser?.firstName}
                             className={`w-32 h-32 rounded-full mb-4 border-4 ${isConnecting
-                                    ? "border-yellow-500 animate-pulse"
-                                    : "border-blue-500"
+                                ? "border-yellow-500 animate-pulse"
+                                : "border-blue-500"
                                 }`}
                         />
                         <h2 className="text-3xl font-bold text-white mb-2">

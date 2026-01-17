@@ -16,6 +16,7 @@ import GroupChatBox from "./components/chatComponents/GroupChatBox";
 import NotificationBox from "./components/NotificationBox";
 import CallWindow from "./components/call/CallWindow";
 import IncomingCallModal from "./components/call/IncomingCallModal";
+import { CallProvider } from "./context/CallContext";
 // import GroupChatBox from "./components/GroupChatBox";
 
 const Applayout = () => {
@@ -108,7 +109,9 @@ const routers = createBrowserRouter([
 function App() {
     return (
         <Provider store={store}>
-            <RouterProvider router={routers} />
+            <CallProvider>
+                <RouterProvider router={routers} />
+            </CallProvider>
         </Provider>
     );
 }

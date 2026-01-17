@@ -1,11 +1,11 @@
 import React from "react";
 import { useSelector } from "react-redux";
-import { useCallManager } from "../../hooks/useCallManager";
+import { useCall } from "../../context/CallContext";
 import { MdCall, MdCallEnd, MdVideocam } from "react-icons/md";
 
 const IncomingCallModal = () => {
     const { incomingCall } = useSelector((store) => store.call);
-    const { handleAcceptCall, handleRejectCall } = useCallManager();
+    const { handleAcceptCall, handleRejectCall } = useCall();
 
     if (!incomingCall) return null;
 

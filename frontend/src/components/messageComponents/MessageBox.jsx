@@ -14,7 +14,7 @@ import getChatName, { getChatImage } from "../../utils/getChatName";
 import ChatDetailsBox from "../chatDetails/ChatDetailsBox";
 import { CiMenuKebab } from "react-icons/ci";
 import { MdCall, MdVideocam } from "react-icons/md";
-import { useCallManager } from "../../hooks/useCallManager";
+import { useCall } from "../../context/CallContext";
 import { toast } from "react-toastify";
 import socket from "../../socket/socket";
 
@@ -31,7 +31,7 @@ const MessageBox = ({ chatId }) => {
 	const allMessage = useSelector((store) => store?.message?.message);
 	const selectedChat = useSelector((store) => store?.myChat?.selectedChat);
 	const authUserId = useSelector((store) => store?.auth?._id);
-	const { startCall } = useCallManager();
+	const { startCall } = useCall();
 
 	// Get the other user in 1-on-1 chat
 	const otherUser = selectedChat?.users?.find((u) => u._id !== authUserId);
