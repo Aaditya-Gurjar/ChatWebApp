@@ -5,6 +5,14 @@
 		<link rel="icon" type="image/png" href="/logo.jpeg" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<title>Chat Application</title>
+    <!-- Polyfills for WebRTC/SimplePeer in production -->
+    <script>
+      // Global polyfills - must load before any other scripts
+      window.global = window.global || window;
+      window.process = window.process || {};
+      window.process.env = window.process.env || {};
+      window.Buffer = window.Buffer || {};
+    </script>
 	</head>
 
 	<body>
