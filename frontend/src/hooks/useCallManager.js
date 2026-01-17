@@ -89,8 +89,11 @@ export const useCallManager = () => {
                 // Create peer connection (initiator)
                 const newPeer = createPeer(stream, true);
 
+                console.log("🔵 PEER CREATED (Caller):", newPeer);
+
                 // Handle peer events
                 newPeer.on("signal", (offer) => {
+                    console.log("🔵 SIGNAL EVENT (Offer generated):", offer);
                     // Send offer to recipient via socket
                     socket.emit("call:initiate", {
                         to: recipientUser._id,
@@ -104,29 +107,39 @@ export const useCallManager = () => {
                         type,
                         offer,
                     });
+                    console.log("🔵 EMITTED call:initiate TO:", recipientUser._id);
                 });
 
                 newPeer.on("stream", (stream) => {
+                    console.log("🟢 REMOTE STREAM RECEIVED:", stream);
                     dispatch(setRemoteStream(stream));
                     dispatch(callConnected());
                     stopRingtone();
                 });
 
                 newPeer.on("error", (err) => {
-                    console.error("Peer error:", err);
+                    console.error("🔴 PEER ERROR:", err);
                     dispatch(setCallError(err.message));
                     toast.error("Connection error");
-                    handleEndCall();
+                    stopRingtone();
+                    stopMediaStream();
+                    destroyPeer();
+                    dispatch(endCall());
+                    setTimeout(() => dispatch(resetCall()), 2000);
                 });
 
                 newPeer.on("close", () => {
-                    console.log("Peer connection closed");
+                    console.log("🟠 PEER CONNECTION CLOSED");
+                });
+
+                newPeer.on("connect", () => {
+                    console.log("🟢 PEER CONNECTED!");
                 });
 
                 // Play ringback tone
                 playRingtone();
             } catch (err) {
-                console.error("Error starting call:", err);
+                console.error("🔴 Error starting call:", err);
                 if (err.name === "NotAllowedError") {
                     toast.error("Please allow camera/microphone access");
                 } else {
@@ -180,46 +193,62 @@ export const useCallManager = () => {
         try {
             if (!incomingCall) return;
 
+            console.log("🟢 ACCEPTING CALL:", incomingCall);
+
             // Get media stream
             const stream = await getMediaStream(incomingCall.type);
+            console.log("🟢 GOT MEDIA STREAM:", stream);
             dispatch(setLocalStream(stream));
             dispatch(acceptCall());
 
             // Create peer connection (not initiator)
             const newPeer = createPeer(stream, false);
+            console.log("🟢 PEER CREATED (Receiver):", newPeer);
 
             // Process the offer
+            console.log("🟢 SIGNALING OFFER:", incomingCall.offer);
             newPeer.signal(incomingCall.offer);
 
             // Handle peer events
             newPeer.on("signal", (answer) => {
+                console.log("🟢 SIGNAL EVENT (Answer generated):", answer);
                 // Send answer to caller
                 socket.emit("call:accept", {
                     to: incomingCall.from._id,
                     answer,
                     callId: incomingCall.callId,
                 });
+                console.log("🟢 EMITTED call:accept TO:", incomingCall.from._id);
             });
 
             newPeer.on("stream", (stream) => {
+                console.log("🟢 REMOTE STREAM RECEIVED:", stream);
                 dispatch(setRemoteStream(stream));
                 dispatch(callConnected());
             });
 
             newPeer.on("error", (err) => {
-                console.error("Peer error:", err);
+                console.error("🔴 PEER ERROR (Receiver):", err);
                 dispatch(setCallError(err.message));
                 toast.error("Connection error");
-                handleEndCall();
+                stopRingtone();
+                stopMediaStream();
+                destroyPeer();
+                dispatch(endCall());
+                setTimeout(() => dispatch(resetCall()), 2000);
             });
 
             newPeer.on("close", () => {
-                console.log("Peer connection closed");
+                console.log("🟠 PEER CONNECTION CLOSED (Receiver)");
+            });
+
+            newPeer.on("connect", () => {
+                console.log("🟢 PEER CONNECTED! (Receiver)");
             });
 
             stopRingtone();
         } catch (err) {
-            console.error("Error accepting call:", err);
+            console.error("🔴 Error accepting call:", err);
             if (err.name === "NotAllowedError") {
                 toast.error("Please allow camera/microphone access");
             } else {
@@ -240,8 +269,12 @@ export const useCallManager = () => {
     // ========== HANDLE CALL ACCEPTED ==========
     useEffect(() => {
         const handleCallAccepted = ({ answer }) => {
+            console.log("🔵 CALL ACCEPTED - Answer received:", answer);
             if (peer) {
+                console.log("🔵 SIGNALING ANSWER to peer");
                 peer.signal(answer);
+            } else {
+                console.error("🔴 NO PEER to signal answer to!");
             }
         };
 
