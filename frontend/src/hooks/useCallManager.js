@@ -13,7 +13,7 @@ import {
     endCall,
     resetCall,
     setLocalStream,
-    setRemoteStream,
+    setRemoteStream as setRemoteStreamAction,
     setCallError,
 } from "../redux/slices/callSlice";
 import { toast } from "react-toastify";
@@ -31,7 +31,7 @@ export const useCallManager = () => {
         toggleAudio,
         toggleVideo,
     } = useMediaStream();
-    const { peer, remoteStream, createPeer, destroyPeer } = useWebRTC();
+    const { peer, remoteStream, setRemoteStream, createPeer, destroyPeer } = useWebRTC();
 
     // Store ringtone audio
     const ringtoneAudioRef = useRef(null);
@@ -124,7 +124,10 @@ export const useCallManager = () => {
 
                 newPeer.on("stream", (stream) => {
                     console.log("🟢 REMOTE STREAM RECEIVED:", stream);
-                    dispatch(setRemoteStream(stream));
+                    console.log("🟢 Stream has audio tracks:", stream.getAudioTracks().length);
+                    console.log("🟢 Stream has video tracks:", stream.getVideoTracks().length);
+                    setRemoteStream(stream); // Update useWebRTC state
+                    dispatch(setRemoteStreamAction(stream)); // Update Redux state
                     dispatch(callConnected());
                     stopRingtone();
                 });
@@ -168,6 +171,7 @@ export const useCallManager = () => {
             dispatch,
             playRingtone,
             stopRingtone,
+            setRemoteStream,
         ]
     );
 
@@ -247,7 +251,10 @@ export const useCallManager = () => {
 
             newPeer.on("stream", (stream) => {
                 console.log("🟢 REMOTE STREAM RECEIVED:", stream);
-                dispatch(setRemoteStream(stream));
+                console.log("🟢 Stream has audio tracks:", stream.getAudioTracks().length);
+                console.log("🟢 Stream has video tracks:", stream.getVideoTracks().length);
+                setRemoteStream(stream); // Update useWebRTC state
+                dispatch(setRemoteStreamAction(stream)); // Update Redux state
                 dispatch(callConnected());
             });
 
@@ -288,15 +295,27 @@ export const useCallManager = () => {
         createPeer,
         dispatch,
         stopRingtone,
+        setRemoteStream,
     ]);
 
     // ========== HANDLE CALL ACCEPTED ==========
     useEffect(() => {
-        const handleCallAccepted = ({ answer }) => {
-            console.log("🔵 CALL ACCEPTED - Answer received:", answer);
+        console.log("🔵 Setting up call:accepted listener, peer exists:", !!peer);
+
+        const handleCallAccepted = ({ answer, callId }) => {
+            console.log("🔵 CALL ACCEPTED EVENT RECEIVED!");
+            console.log("🔵 Answer:", answer);
+            console.log("🔵 Call ID:", callId);
+            console.log("🔵 Peer exists:", !!peer);
+
             if (peer) {
                 console.log("🔵 SIGNALING ANSWER to peer");
-                peer.signal(answer);
+                try {
+                    peer.signal(answer);
+                    console.log("🔵 Answer signaled successfully");
+                } catch (err) {
+                    console.error("🔴 Error signaling answer:", err);
+                }
             } else {
                 console.error("🔴 NO PEER to signal answer to!");
             }
@@ -304,7 +323,10 @@ export const useCallManager = () => {
 
         socket.on("call:accepted", handleCallAccepted);
 
+        console.log("🔵 call:accepted listener registered");
+
         return () => {
+            console.log("🔵 Removing call:accepted listener");
             socket.off("call:accepted", handleCallAccepted);
         };
     }, [peer]);

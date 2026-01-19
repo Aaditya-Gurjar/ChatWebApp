@@ -80,8 +80,11 @@ io.on("connection", (socket) => {
 		if (!socket.hasJoined) {
 			socket.join(userId);
 			socket.hasJoined = true;
-			console.log("User joined:", userId);
+			console.log(`✅ User joined room: ${userId} (socket: ${socket.id})`);
 			socket.emit("connected");
+			console.log(`✅ Sent 'connected' event to user: ${userId}`);
+		} else {
+			console.log(`⚠️ User ${userId} already joined (socket: ${socket.id})`);
 		}
 	};
 	const newMessageHandler = (newMessageReceived) => {
@@ -158,12 +161,13 @@ io.on("connection", (socket) => {
 
 	// User accepts call
 	socket.on("call:accept", ({ to, answer, callId }) => {
-		console.log(`Call ${callId} accepted`);
+		console.log(`Call ${callId} accepted, sending answer to user: ${to}`);
 		// Forward answer to caller
 		socket.to(to).emit("call:accepted", {
 			answer,
 			callId,
 		});
+		console.log(`✅ Answer emitted to room: ${to}`);
 	});
 
 	// User rejects call

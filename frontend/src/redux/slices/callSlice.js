@@ -72,8 +72,10 @@ const callSlice = createSlice({
 
 		// Call connected
 		callConnected: (state) => {
+			console.log("🔴 REDUX: callConnected called, updating to 'connected'");
 			state.callStatus = "connected";
 			state.callStartTime = Date.now();
+			console.log("🔴 REDUX: New callStatus:", state.callStatus);
 		},
 
 		// End call

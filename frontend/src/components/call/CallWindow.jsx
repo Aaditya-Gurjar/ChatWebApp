@@ -38,15 +38,23 @@ const CallWindow = () => {
             // Always attach to audio element for reliable playback
             if (remoteAudioRef.current) {
                 remoteAudioRef.current.srcObject = remoteStream;
+                console.log("🔊 ATTACHED TO AUDIO ELEMENT");
+                console.log("🔊 Audio tracks:", remoteStream.getAudioTracks());
+                console.log("🔊 Audio element muted:", remoteAudioRef.current.muted);
                 remoteAudioRef.current.play().catch((err) => {
                     console.error("🔊 Audio play failed:", err);
+                    console.error("🔊 Error name:", err.name);
+                    console.error("🔊 Error message:", err.message);
                 });
-                console.log("🔊 ATTACHED TO AUDIO ELEMENT");
             }
         }
     }, [remoteStream, callType]);
 
     if (callStatus === "idle") return null;
+
+    console.log("📱 CallWindow render - callStatus:", callStatus);
+    console.log("📱 activeCall:", activeCall);
+    console.log("📱 remoteStream exists:", !!remoteStream);
 
     const otherUser = activeCall?.isOutgoing ? recipient : caller;
     const isConnecting =
@@ -69,8 +77,8 @@ const CallWindow = () => {
                             src={otherUser?.image}
                             alt={otherUser?.firstName}
                             className={`w-32 h-32 rounded-full mb-4 border-4 ${isConnecting
-                                    ? "border-yellow-500 animate-pulse"
-                                    : "border-blue-500"
+                                ? "border-yellow-500 animate-pulse"
+                                : "border-blue-500"
                                 }`}
                         />
                         <h2 className="text-3xl font-bold text-white mb-2">
@@ -110,6 +118,8 @@ const CallWindow = () => {
                 ref={remoteAudioRef}
                 autoPlay
                 playsInline
+                muted={false}
+                volume={1.0}
                 style={{ display: "none" }}
             />
 

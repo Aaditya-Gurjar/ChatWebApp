@@ -31,10 +31,30 @@ const Home = () => {
 
 	// socket connection
 	useEffect(() => {
-		if (!authUserId) return;
+		if (!authUserId) {
+			console.log("⚠️ No authUserId yet, skipping socket setup");
+			return;
+		}
+
+		console.log("🔌 Setting up socket for user:", authUserId);
+
+		// Set up the event listener BEFORE emitting setup
+		const handleConnected = () => {
+			console.log("🔌 Socket connected for user:", authUserId);
+			dispatch(setSocketConnected(true));
+		};
+
+		socket.on("connected", handleConnected);
+
+		// Now emit the setup event
 		socket.emit("setup", authUserId);
-		socket.on("connected", () => dispatch(setSocketConnected(true)));
-	}, [authUserId]);
+
+		// Cleanup function to remove listener when component unmounts or authUserId changes
+		return () => {
+			console.log("🔌 Cleaning up socket listener for user:", authUserId);
+			socket.off("connected", handleConnected);
+		};
+	}, [authUserId, dispatch]);
 
 	// socket message received
 	useEffect(() => {
@@ -101,9 +121,8 @@ const Home = () => {
 	return (
 		<div className="flex w-full border-slate-500 border rounded-sm shadow-md shadow-black relative">
 			<div
-				className={`${
-					selectedChat && "hidden"
-				} sm:block sm:w-[40%] w-full h-[80vh] bg-black/40 border-r border-slate-500 relative`}
+				className={`${selectedChat && "hidden"
+					} sm:block sm:w-[40%] w-full h-[80vh] bg-black/40 border-r border-slate-500 relative`}
 			>
 				<div className="absolute bottom-3 right-6 cursor-pointer text-white">
 					<MdChat
@@ -115,9 +134,8 @@ const Home = () => {
 				{isUserSearchBox ? <UserSearch /> : <MyChat />}
 			</div>
 			<div
-				className={`${
-					!selectedChat && "hidden"
-				} sm:block sm:w-[60%] w-full h-[80vh] bg-black/40 relative overflow-hidden`}
+				className={`${!selectedChat && "hidden"
+					} sm:block sm:w-[60%] w-full h-[80vh] bg-black/40 relative overflow-hidden`}
 			>
 				{selectedChat ? (
 					<MessageBox chatId={selectedChat?._id} />
