@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import {
     audioConstraints,
     videoConstraints,
@@ -7,12 +7,15 @@ import {
 export const useMediaStream = () => {
     const [localStream, setLocalStream] = useState(null);
     const [error, setError] = useState(null);
+    // Use ref to maintain stable reference for callbacks (prevents stale closure)
+    const streamRef = useRef(null);
 
     const getMediaStream = useCallback(async (type = "audio") => {
         try {
             const constraints =
                 type === "video" ? videoConstraints : audioConstraints;
             const stream = await navigator.mediaDevices.getUserMedia(constraints);
+            streamRef.current = stream;
             setLocalStream(stream);
             return stream;
         } catch (err) {
@@ -23,33 +26,34 @@ export const useMediaStream = () => {
     }, []);
 
     const stopMediaStream = useCallback(() => {
-        if (localStream) {
-            localStream.getTracks().forEach((track) => track.stop());
+        if (streamRef.current) {
+            streamRef.current.getTracks().forEach((track) => track.stop());
+            streamRef.current = null;
             setLocalStream(null);
         }
-    }, [localStream]);
+    }, []);
 
     const toggleAudio = useCallback(() => {
-        if (localStream) {
-            const audioTrack = localStream.getAudioTracks()[0];
+        if (streamRef.current) {
+            const audioTrack = streamRef.current.getAudioTracks()[0];
             if (audioTrack) {
                 audioTrack.enabled = !audioTrack.enabled;
                 return audioTrack.enabled;
             }
         }
         return false;
-    }, [localStream]);
+    }, []);
 
     const toggleVideo = useCallback(() => {
-        if (localStream) {
-            const videoTrack = localStream.getVideoTracks()[0];
+        if (streamRef.current) {
+            const videoTrack = streamRef.current.getVideoTracks()[0];
             if (videoTrack) {
                 videoTrack.enabled = !videoTrack.enabled;
                 return videoTrack.enabled;
             }
         }
         return false;
-    }, [localStream]);
+    }, []);
 
     return {
         localStream,

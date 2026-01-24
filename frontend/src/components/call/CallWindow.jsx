@@ -40,12 +40,22 @@ const CallWindow = () => {
                 remoteAudioRef.current.srcObject = remoteStream;
                 console.log("🔊 ATTACHED TO AUDIO ELEMENT");
                 console.log("🔊 Audio tracks:", remoteStream.getAudioTracks());
-                console.log("🔊 Audio element muted:", remoteAudioRef.current.muted);
-                remoteAudioRef.current.play().catch((err) => {
-                    console.error("🔊 Audio play failed:", err);
-                    console.error("🔊 Error name:", err.name);
-                    console.error("🔊 Error message:", err.message);
-                });
+
+                // Use async function with user gesture fallback for autoplay policy
+                const playAudio = async () => {
+                    try {
+                        await remoteAudioRef.current.play();
+                        console.log("🔊 Audio playback started successfully");
+                    } catch (err) {
+                        console.warn("🔊 Autoplay blocked, will play on user interaction:", err.name);
+                        // Add one-time click listener to resume audio
+                        const resumeAudio = () => {
+                            remoteAudioRef.current?.play().catch(console.error);
+                        };
+                        document.addEventListener("click", resumeAudio, { once: true });
+                    }
+                };
+                playAudio();
             }
         }
     }, [remoteStream, callType]);
@@ -118,8 +128,6 @@ const CallWindow = () => {
                 ref={remoteAudioRef}
                 autoPlay
                 playsInline
-                muted={false}
-                volume={1.0}
                 style={{ display: "none" }}
             />
 

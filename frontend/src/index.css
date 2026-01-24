@@ -39,6 +39,13 @@ body {
 	user-select: none;
 }
 
+/* Allow text selection in chat messages */
+.select-text {
+	user-select: text;
+	-webkit-user-select: text;
+	cursor: text;
+}
+
 /* Header Style */
 .hiddenbox {
 	top: -80px;

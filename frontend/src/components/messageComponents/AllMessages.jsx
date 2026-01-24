@@ -8,6 +8,7 @@ import {
     SimpleDateMonthDay,
     SimpleTime,
 } from "../../utils/formateDateTime";
+import { linkifyText } from "../../utils/linkify.jsx";
 
 const AllMessages = ({ allMessage }) => {
     const chatBox = useRef();
@@ -73,22 +74,21 @@ const AllMessages = ({ allMessage }) => {
                                     new Date(
                                         message?.updatedAt
                                     ).toDateString() && (
-                                    <span className="text-xs font-light mb-2 mt-1 text-white/50 bg-black h-7 w-fit px-5 rounded-md flex items-center justify-center cursor-pointer">
-                                        {SimpleDateMonthDay(message?.updatedAt)}
-                                    </span>
-                                )}
+                                        <span className="text-xs font-light mb-2 mt-1 text-white/50 bg-black h-7 w-fit px-5 rounded-md flex items-center justify-center cursor-pointer">
+                                            {SimpleDateMonthDay(message?.updatedAt)}
+                                        </span>
+                                    )}
                             </div>
                             <div
-                                className={`flex items-start gap-1 ${
-                                    message?.sender?._id === adminId
-                                        ? "flex-row-reverse text-white"
-                                        : "flex-row text-black"
-                                }`}
+                                className={`flex items-start gap-1 ${message?.sender?._id === adminId
+                                    ? "flex-row-reverse text-white"
+                                    : "flex-row text-black"
+                                    }`}
                             >
                                 {message?.chat?.isGroupChat &&
                                     message?.sender?._id !== adminId &&
                                     (allMessage[idx + 1]?.sender?._id !==
-                                    message?.sender?._id ? (
+                                        message?.sender?._id ? (
                                         <img
                                             src={message?.sender?.image}
                                             alt=""
@@ -98,11 +98,10 @@ const AllMessages = ({ allMessage }) => {
                                         <div className="h-9 w-9 rounded-full"></div>
                                     ))}
                                 <div
-                                    className={`${
-                                        message?.sender?._id === adminId
-                                            ? "bg-gradient-to-tr to-slate-800 from-green-400 rounded-s-lg rounded-ee-2xl"
-                                            : "bg-gradient-to-tr to-slate-800 from-white rounded-e-lg rounded-es-2xl"
-                                    } py-1.5 px-2 min-w-10 text-start flex flex-col relative max-w-[85%]`}
+                                    className={`${message?.sender?._id === adminId
+                                        ? "bg-gradient-to-tr to-slate-800 from-green-400 rounded-s-lg rounded-ee-2xl"
+                                        : "bg-gradient-to-tr to-slate-800 from-white rounded-e-lg rounded-es-2xl"
+                                        } py-1.5 px-2 min-w-10 text-start flex flex-col relative max-w-[85%]`}
                                 >
                                     {message?.chat?.isGroupChat &&
                                         message?.sender?._id !== adminId && (
@@ -111,11 +110,10 @@ const AllMessages = ({ allMessage }) => {
                                             </span>
                                         )}
                                     <div
-                                        className={`mt-1 pb-1.5 ${
-                                            message?.sender?._id == adminId
-                                                ? "pr-16"
-                                                : "pr-12"
-                                        }`}
+                                        className={`mt-1 pb-1.5 ${message?.sender?._id == adminId
+                                            ? "pr-16"
+                                            : "pr-12"
+                                            }`}
                                     >
                                         {/* Show image if message is empty and image exists */}
                                         {(!message?.message && message?.image) ? (
@@ -127,8 +125,8 @@ const AllMessages = ({ allMessage }) => {
                                                 onClick={() => setZoomImage(message.image)}
                                             />
                                         ) : (
-                                            <span className="">
-                                                {message?.message}
+                                            <span className="select-text break-words">
+                                                {linkifyText(message?.message || "")}
                                             </span>
                                         )}
                                         <span
@@ -140,11 +138,11 @@ const AllMessages = ({ allMessage }) => {
                                             {SimpleTime(message?.updatedAt)}
                                             {message?.sender?._id ===
                                                 adminId && (
-                                                <VscCheckAll
-                                                    color="white"
-                                                    fontSize={14}
-                                                />
-                                            )}
+                                                    <VscCheckAll
+                                                        color="white"
+                                                        fontSize={14}
+                                                    />
+                                                )}
                                         </span>
                                     </div>
                                 </div>

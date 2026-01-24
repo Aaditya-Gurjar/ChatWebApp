@@ -9,11 +9,22 @@ export const iceServers = {
         // Mozilla STUN server
         { urls: "stun:stun.services.mozilla.com" },
 
-        // Optional: Add your TURN server here for better connectivity
-        // {
-        //   urls: 'turn:your-turn-server.com:3478',
-        //   username: 'your-username',
-        //   credential: 'your-password',
-        // },
+        // Free TURN servers from OpenRelay (for development/testing)
+        // NOTE: For production, replace with your own TURN server
+        {
+            urls: "turn:openrelay.metered.ca:80",
+            username: "openrelayproject",
+            credential: "openrelayproject",
+        },
+        {
+            urls: "turn:openrelay.metered.ca:443",
+            username: "openrelayproject",
+            credential: "openrelayproject",
+        },
+        {
+            urls: "turn:openrelay.metered.ca:443?transport=tcp",
+            username: "openrelayproject",
+            credential: "openrelayproject",
+        },
     ],
 };

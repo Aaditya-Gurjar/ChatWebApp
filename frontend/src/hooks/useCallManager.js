@@ -31,7 +31,7 @@ export const useCallManager = () => {
         toggleAudio,
         toggleVideo,
     } = useMediaStream();
-    const { peer, remoteStream, setRemoteStream, createPeer, destroyPeer } = useWebRTC();
+    const { peer, peerRef, remoteStream, setRemoteStream, createPeer, destroyPeer } = useWebRTC();
 
     // Store ringtone audio
     const ringtoneAudioRef = useRef(null);
@@ -300,18 +300,18 @@ export const useCallManager = () => {
 
     // ========== HANDLE CALL ACCEPTED ==========
     useEffect(() => {
-        console.log("🔵 Setting up call:accepted listener, peer exists:", !!peer);
+        console.log("🔵 Setting up call:accepted listener, peerRef exists:", !!peerRef.current);
 
         const handleCallAccepted = ({ answer, callId }) => {
             console.log("🔵 CALL ACCEPTED EVENT RECEIVED!");
             console.log("🔵 Answer:", answer);
             console.log("🔵 Call ID:", callId);
-            console.log("🔵 Peer exists:", !!peer);
+            console.log("🔵 PeerRef.current exists:", !!peerRef.current);
 
-            if (peer) {
+            if (peerRef.current) {
                 console.log("🔵 SIGNALING ANSWER to peer");
                 try {
-                    peer.signal(answer);
+                    peerRef.current.signal(answer);
                     console.log("🔵 Answer signaled successfully");
                 } catch (err) {
                     console.error("🔴 Error signaling answer:", err);
@@ -329,7 +329,7 @@ export const useCallManager = () => {
             console.log("🔵 Removing call:accepted listener");
             socket.off("call:accepted", handleCallAccepted);
         };
-    }, [peer]);
+    }, [peerRef]);
 
     // ========== HANDLE CALL REJECTED ==========
     useEffect(() => {
@@ -354,9 +354,9 @@ export const useCallManager = () => {
     // ========== ICE CANDIDATES ==========
     useEffect(() => {
         const handleIceCandidate = ({ candidate }) => {
-            if (peer) {
+            if (peerRef.current) {
                 try {
-                    peer.signal(candidate);
+                    peerRef.current.signal(candidate);
                 } catch (err) {
                     console.error("Error processing ICE candidate:", err);
                 }
@@ -368,7 +368,7 @@ export const useCallManager = () => {
         return () => {
             socket.off("call:ice-candidate", handleIceCandidate);
         };
-    }, [peer]);
+    }, [peerRef]);
 
     // ========== REJECT CALL ==========
     const handleRejectCall = useCallback(() => {

@@ -33,6 +33,7 @@ export const useWebRTC = () => {
 
     return {
         peer,
+        peerRef,  // Expose ref for stable access in callbacks
         remoteStream,
         setRemoteStream,
         createPeer,
