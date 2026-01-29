@@ -20,7 +20,7 @@ const initialState = {
 	// Call controls state
 	isMuted: false,
 	isVideoEnabled: true,
-	isSpeakerOn: true,
+	isSpeakerOn: false, // Default to earpiece mode for voice calls
 
 	// Call metadata
 	callStartTime: null,

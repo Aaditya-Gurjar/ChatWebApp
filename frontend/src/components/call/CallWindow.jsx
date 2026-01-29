@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useCallback } from "react";
 import { useSelector } from "react-redux";
 import { useCall } from "../../context/CallContext";
 import CallControls from "./CallControls";
@@ -17,13 +17,20 @@ const CallWindow = () => {
     const remoteVideoRef = useRef(null);
     const remoteAudioRef = useRef(null); // For audio playback
 
-    // Register audio element with context for speaker toggle
-    useEffect(() => {
-        if (remoteAudioRef.current && setAudioElement) {
-            setAudioElement(remoteAudioRef.current);
+    // Callback ref to register audio element immediately when mounted
+    const audioRefCallback = useCallback((element) => {
+        remoteAudioRef.current = element;
+        if (element && setAudioElement) {
+            console.log("🔊 Audio element mounted, registering with context");
+            setAudioElement(element);
         }
+    }, [setAudioElement]);
+
+    // Cleanup when component unmounts or call ends
+    useEffect(() => {
         return () => {
             if (setAudioElement) {
+                console.log("🔊 Cleaning up audio element registration");
                 setAudioElement(null);
             }
         };
@@ -138,11 +145,12 @@ const CallWindow = () => {
 
             {/* Hidden audio element for remote stream (ensures audio plays) */}
             <audio
-                ref={remoteAudioRef}
+                ref={audioRefCallback}
                 autoPlay
                 playsInline
                 style={{ display: "none" }}
             />
+
 
             {/* Call Controls */}
             <CallControls />
