@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { v4 as uuidv4 } from "uuid";
 import socket from "../socket/socket";
@@ -15,6 +15,7 @@ import {
     setLocalStream,
     setRemoteStream as setRemoteStreamAction,
     setCallError,
+    toggleSpeaker as toggleSpeakerAction,
 } from "../redux/slices/callSlice";
 import { toast } from "react-toastify";
 
@@ -41,6 +42,13 @@ export const useCallManager = () => {
     const pendingCandidatesRef = useRef([]);
     // Track if peer is ready to receive ICE candidates (after answer is signaled for caller)
     const peerReadyForCandidatesRef = useRef(false);
+
+    // Audio element ref for speaker toggle
+    const audioElementRef = useRef(null);
+    // Available audio output devices
+    const [audioOutputs, setAudioOutputs] = useState([]);
+    // Current speaker mode (true = speaker, false = default/earpiece)
+    const [isSpeakerMode, setIsSpeakerMode] = useState(false);
 
     // Ringtone helpers
     const playRingtone = useCallback(() => {
@@ -516,6 +524,85 @@ export const useCallManager = () => {
         };
     }, [stopRingtone, stopMediaStream, destroyPeer, dispatch]);
 
+    // ========== SPEAKER TOGGLE ==========
+    // Set the audio element reference (called from CallWindow)
+    const setAudioElement = useCallback((element) => {
+        audioElementRef.current = element;
+        console.log("🔊 Audio element registered:", !!element);
+
+        // Enumerate available audio outputs when element is set
+        if (element && navigator.mediaDevices?.enumerateDevices) {
+            navigator.mediaDevices.enumerateDevices()
+                .then((devices) => {
+                    const outputs = devices.filter(d => d.kind === "audiooutput");
+                    setAudioOutputs(outputs);
+                    console.log("🔊 Available audio outputs:", outputs.map(d => d.label || d.deviceId));
+                })
+                .catch((err) => {
+                    console.warn("🔊 Could not enumerate devices:", err);
+                });
+        }
+    }, []);
+
+    // Toggle between speaker and default audio output
+    const toggleSpeaker = useCallback(async () => {
+        const audioElement = audioElementRef.current;
+
+        if (!audioElement) {
+            console.warn("🔊 No audio element available for speaker toggle");
+            toast.info("Audio not ready yet");
+            return;
+        }
+
+        // Check if setSinkId is supported
+        if (typeof audioElement.setSinkId !== "function") {
+            console.warn("🔊 setSinkId not supported in this browser");
+            // Still update the state for visual feedback
+            setIsSpeakerMode(!isSpeakerMode);
+            dispatch(toggleSpeakerAction());
+            toast.info(isSpeakerMode ? "Earpiece mode (visual only)" : "Speaker mode (visual only)");
+            return;
+        }
+
+        try {
+            if (isSpeakerMode) {
+                // Switch back to default output (earpiece/default)
+                await audioElement.setSinkId("");
+                setIsSpeakerMode(false);
+                dispatch(toggleSpeakerAction());
+                console.log("🔊 Switched to default audio output");
+                toast.success("Earpiece mode");
+            } else {
+                // Try to find and switch to speakers
+                // Look for a device with "speaker" in the label, or use default
+                const speakerDevice = audioOutputs.find(
+                    (d) => d.label.toLowerCase().includes("speaker")
+                ) || audioOutputs.find(
+                    (d) => d.deviceId === "default" || d.deviceId === ""
+                ) || audioOutputs[0];
+
+                if (speakerDevice) {
+                    await audioElement.setSinkId(speakerDevice.deviceId);
+                    setIsSpeakerMode(true);
+                    dispatch(toggleSpeakerAction());
+                    console.log("🔊 Switched to speaker:", speakerDevice.label || speakerDevice.deviceId);
+                    toast.success("Speaker mode");
+                } else {
+                    // No specific speaker found, just toggle state
+                    setIsSpeakerMode(true);
+                    dispatch(toggleSpeakerAction());
+                    toast.info("Speaker mode enabled");
+                }
+            }
+        } catch (err) {
+            console.error("🔊 Error toggling speaker:", err);
+            // Still update state for visual feedback
+            setIsSpeakerMode(!isSpeakerMode);
+            dispatch(toggleSpeakerAction());
+            toast.info(isSpeakerMode ? "Earpiece mode" : "Speaker mode");
+        }
+    }, [isSpeakerMode, audioOutputs, dispatch]);
+
     return {
         startCall,
         handleAcceptCall,
@@ -523,6 +610,9 @@ export const useCallManager = () => {
         handleEndCall,
         toggleAudio,
         toggleVideo,
+        toggleSpeaker,
+        setAudioElement,
+        isSpeakerMode,
         callStatus,
         localStream,
         remoteStream,

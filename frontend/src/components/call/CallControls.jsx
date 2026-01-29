@@ -8,14 +8,16 @@ import {
     MdVideocam,
     MdVideocamOff,
     MdCallEnd,
+    MdVolumeUp,
+    MdVolumeOff,
 } from "react-icons/md";
 
 const CallControls = () => {
     const dispatch = useDispatch();
-    const { isMuted, isVideoEnabled, callType } = useSelector(
+    const { isMuted, isVideoEnabled, callType, isSpeakerOn } = useSelector(
         (store) => store.call
     );
-    const { handleEndCall, toggleAudio, toggleVideo: toggleVideoStream } =
+    const { handleEndCall, toggleAudio, toggleVideo: toggleVideoStream, toggleSpeaker } =
         useCall();
 
     const handleToggleMute = () => {
@@ -28,27 +30,45 @@ const CallControls = () => {
         dispatch(toggleVideo());
     };
 
+    const handleToggleSpeaker = () => {
+        toggleSpeaker();
+    };
+
     return (
         <div className="bg-slate-900/90 backdrop-blur-sm p-6 flex justify-center gap-6">
             {/* Mute/Unmute */}
             <button
                 onClick={handleToggleMute}
                 className={`rounded-full p-4 transition-all text-white ${isMuted
-                        ? "bg-red-600 hover:bg-red-700"
-                        : "bg-slate-700 hover:bg-slate-600"
+                    ? "bg-red-600 hover:bg-red-700"
+                    : "bg-slate-700 hover:bg-slate-600"
                     }`}
                 title={isMuted ? "Unmute" : "Mute"}
             >
                 {isMuted ? <MdMicOff fontSize={24} /> : <MdMic fontSize={24} />}
             </button>
 
+            {/* Speaker Toggle (only for audio calls) */}
+            {callType === "audio" && (
+                <button
+                    onClick={handleToggleSpeaker}
+                    className={`rounded-full p-4 transition-all text-white ${isSpeakerOn
+                        ? "bg-blue-600 hover:bg-blue-700"
+                        : "bg-slate-700 hover:bg-slate-600"
+                        }`}
+                    title={isSpeakerOn ? "Switch to Earpiece" : "Switch to Speaker"}
+                >
+                    {isSpeakerOn ? <MdVolumeUp fontSize={24} /> : <MdVolumeOff fontSize={24} />}
+                </button>
+            )}
+
             {/* Video Toggle (only for video calls) */}
             {callType === "video" && (
                 <button
                     onClick={handleToggleVideo}
                     className={`rounded-full p-4 transition-all text-white ${!isVideoEnabled
-                            ? "bg-red-600 hover:bg-red-700"
-                            : "bg-slate-700 hover:bg-slate-600"
+                        ? "bg-red-600 hover:bg-red-700"
+                        : "bg-slate-700 hover:bg-slate-600"
                         }`}
                     title={isVideoEnabled ? "Turn off camera" : "Turn on camera"}
                 >
@@ -73,3 +93,4 @@ const CallControls = () => {
 };
 
 export default CallControls;
+

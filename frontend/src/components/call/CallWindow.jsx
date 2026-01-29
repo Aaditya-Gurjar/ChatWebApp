@@ -12,10 +12,23 @@ const CallWindow = () => {
         recipient,
         activeCall,
     } = useSelector((store) => store.call);
-    const { localStream, remoteStream } = useCall();
+    const { localStream, remoteStream, setAudioElement } = useCall();
     const localVideoRef = useRef(null);
     const remoteVideoRef = useRef(null);
     const remoteAudioRef = useRef(null); // For audio playback
+
+    // Register audio element with context for speaker toggle
+    useEffect(() => {
+        if (remoteAudioRef.current && setAudioElement) {
+            setAudioElement(remoteAudioRef.current);
+        }
+        return () => {
+            if (setAudioElement) {
+                setAudioElement(null);
+            }
+        };
+    }, [setAudioElement]);
+
 
     // Attach local stream to video element
     useEffect(() => {
