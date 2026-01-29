@@ -36,6 +36,12 @@ export const useCallManager = () => {
     // Store ringtone audio
     const ringtoneAudioRef = useRef(null);
 
+    // ICE candidate queue for handling race conditions
+    // Candidates that arrive before peer is ready are queued here
+    const pendingCandidatesRef = useRef([]);
+    // Track if peer is ready to receive ICE candidates (after answer is signaled for caller)
+    const peerReadyForCandidatesRef = useRef(false);
+
     // Ringtone helpers
     const playRingtone = useCallback(() => {
         // Ringtone disabled to avoid 404 errors
@@ -139,6 +145,11 @@ export const useCallManager = () => {
                     stopRingtone();
                     stopMediaStream();
                     destroyPeer();
+
+                    // Reset ICE candidate queue and peer ready flag
+                    pendingCandidatesRef.current = [];
+                    peerReadyForCandidatesRef.current = false;
+
                     dispatch(endCall());
                     setTimeout(() => dispatch(resetCall()), 2000);
                 });
@@ -225,6 +236,24 @@ export const useCallManager = () => {
             console.log("🟢 SIGNALING OFFER:", incomingCall.offer);
             newPeer.signal(incomingCall.offer);
 
+            // Receiver is ready for ICE candidates immediately after signaling offer
+            peerReadyForCandidatesRef.current = true;
+            console.log("🟢 Receiver peer marked as ready for ICE candidates");
+
+            // Flush any ICE candidates that arrived while call was ringing
+            if (pendingCandidatesRef.current.length > 0) {
+                console.log(`🟢 Flushing ${pendingCandidatesRef.current.length} queued ICE candidates (Receiver)`);
+                pendingCandidatesRef.current.forEach((candidate) => {
+                    try {
+                        newPeer.signal(candidate);
+                        console.log("🟢 Queued ICE candidate signaled (Receiver)");
+                    } catch (err) {
+                        console.error("🔴 Error signaling queued ICE candidate (Receiver):", err);
+                    }
+                });
+                pendingCandidatesRef.current = [];
+            }
+
             // Handle peer events
             newPeer.on("signal", (data) => {
                 console.log("🟢 SIGNAL EVENT:", data);
@@ -265,6 +294,11 @@ export const useCallManager = () => {
                 stopRingtone();
                 stopMediaStream();
                 destroyPeer();
+
+                // Reset ICE candidate queue and peer ready flag
+                pendingCandidatesRef.current = [];
+                peerReadyForCandidatesRef.current = false;
+
                 dispatch(endCall());
                 setTimeout(() => dispatch(resetCall()), 2000);
             });
@@ -313,6 +347,23 @@ export const useCallManager = () => {
                 try {
                     peerRef.current.signal(answer);
                     console.log("🔵 Answer signaled successfully");
+
+                    // Now peer is ready to receive ICE candidates
+                    peerReadyForCandidatesRef.current = true;
+
+                    // Flush any queued ICE candidates
+                    if (pendingCandidatesRef.current.length > 0) {
+                        console.log(`🔵 Flushing ${pendingCandidatesRef.current.length} queued ICE candidates`);
+                        pendingCandidatesRef.current.forEach((candidate) => {
+                            try {
+                                peerRef.current.signal(candidate);
+                                console.log("🔵 Queued ICE candidate signaled");
+                            } catch (err) {
+                                console.error("🔴 Error signaling queued ICE candidate:", err);
+                            }
+                        });
+                        pendingCandidatesRef.current = [];
+                    }
                 } catch (err) {
                     console.error("🔴 Error signaling answer:", err);
                 }
@@ -338,6 +389,11 @@ export const useCallManager = () => {
             stopRingtone();
             stopMediaStream();
             destroyPeer();
+
+            // Reset ICE candidate queue and peer ready flag
+            pendingCandidatesRef.current = [];
+            peerReadyForCandidatesRef.current = false;
+
             dispatch(endCall());
             setTimeout(() => {
                 dispatch(resetCall());
@@ -354,12 +410,24 @@ export const useCallManager = () => {
     // ========== ICE CANDIDATES ==========
     useEffect(() => {
         const handleIceCandidate = ({ candidate }) => {
-            if (peerRef.current) {
+            console.log("🔵 ICE CANDIDATE received, peerReady:", peerReadyForCandidatesRef.current);
+
+            if (peerRef.current && peerReadyForCandidatesRef.current) {
+                // Peer is ready, signal immediately
                 try {
                     peerRef.current.signal(candidate);
+                    console.log("🔵 ICE candidate signaled immediately");
                 } catch (err) {
                     console.error("Error processing ICE candidate:", err);
                 }
+            } else if (peerRef.current) {
+                // Peer exists but not ready yet (waiting for answer to be signaled)
+                // Queue the candidate for later
+                console.log("🔵 Queuing ICE candidate (peer not ready yet)");
+                pendingCandidatesRef.current.push(candidate);
+            } else {
+                console.warn("🔵 No peer to handle ICE candidate, queuing anyway");
+                pendingCandidatesRef.current.push(candidate);
             }
         };
 
@@ -402,6 +470,11 @@ export const useCallManager = () => {
         stopRingtone();
         stopMediaStream();
         destroyPeer();
+
+        // Reset ICE candidate queue and peer ready flag
+        pendingCandidatesRef.current = [];
+        peerReadyForCandidatesRef.current = false;
+
         dispatch(endCall());
 
         // Reset after showing "ended" status
@@ -425,6 +498,11 @@ export const useCallManager = () => {
             stopRingtone();
             stopMediaStream();
             destroyPeer();
+
+            // Reset ICE candidate queue and peer ready flag
+            pendingCandidatesRef.current = [];
+            peerReadyForCandidatesRef.current = false;
+
             dispatch(endCall());
             setTimeout(() => {
                 dispatch(resetCall());
