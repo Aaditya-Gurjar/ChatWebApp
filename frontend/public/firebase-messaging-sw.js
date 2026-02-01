@@ -2,7 +2,7 @@
 // This handles background push notifications and PWA caching
 
 // PWA Cache Configuration
-const CACHE_VERSION = 'v3';  // Incremented to force update
+const CACHE_VERSION = 'v4';  // Incremented to force update
 const CACHE_NAME = `chatapp-cache-${CACHE_VERSION}`;
 
 // Resources to cache for offline access
@@ -15,6 +15,7 @@ const ESSENTIAL_RESOURCES = [
 ];
 
 // Import Firebase scripts for service worker context
+// These are required for token generation but NOT for receiving push messages
 importScripts('https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.7.0/firebase-messaging-compat.js');
 
@@ -28,47 +29,74 @@ const firebaseConfig = {
     appId: "1:377240953089:web:142040ea34019403fa7b00"
 };
 
-// Initialize Firebase in service worker
+// Initialize Firebase (required for token generation)
 firebase.initializeApp(firebaseConfig);
-
-// Get messaging instance
 const messaging = firebase.messaging();
 
 // ============================================
-// FIREBASE BACKGROUND MESSAGE HANDLER
+// STANDARD PUSH EVENT HANDLER
 // ============================================
-// This is the RELIABLE handler for iOS Safari PWA
-// The tag property in webpush.notification (set by backend) prevents duplicates
+// CRITICAL: Firebase's onBackgroundMessage does NOT work reliably on iOS Safari PWAs!
+// We use the standard Web Push API 'push' event instead.
+// See: https://github.com/nicemak/react-firebase-web-push-pwa
 
-messaging.onBackgroundMessage((payload) => {
-    console.log('[SW] Background message received:', payload);
+self.addEventListener('push', function (event) {
+    console.log('[SW] Push event received!');
 
-    // Extract data from payload
-    const data = payload.data || {};
-    const notification = payload.notification || {};
+    // Parse the push data
+    let data = {};
+    let notification = {};
 
-    // Determine notification type
+    if (event.data) {
+        try {
+            const payload = event.data.json();
+            console.log('[SW] Payload:', JSON.stringify(payload));
+
+            // FCM sends data in these fields
+            data = payload.data || {};
+            notification = payload.notification || {};
+        } catch (e) {
+            console.log('[SW] Could not parse push data as JSON:', e);
+            // Try text
+            try {
+                const text = event.data.text();
+                console.log('[SW] Push data as text:', text);
+            } catch (e2) {
+                console.log('[SW] Could not read push data');
+            }
+        }
+    }
+
+    // Build notification content
     const notificationType = data.type || 'notification';
-
-    // Create tag for deduplication (matches backend)
     const tag = `${notificationType}-${data.chatId || data.callId || Date.now()}`;
 
-    // Build notification
-    let title = notification.title || 'ChatApp';
+    let title = 'ChatApp';
+    let body = 'You have a new notification';
     let options = {
-        body: notification.body || 'You have a new notification',
         icon: '/pwa-icons/icon-192x192.png',
         badge: '/pwa-icons/icon-96x96.png',
-        tag: tag,  // CRITICAL: prevents duplicate notifications
+        tag: tag,
         renotify: true,
         data: data,
         vibrate: [200, 100, 200]
     };
 
-    // Customize based on type
-    if (notificationType === 'call') {
-        title = notification.title || '📞 Incoming Call';
-        options.body = notification.body || `${data.callerName || 'Someone'} is calling...`;
+    // Use notification payload if available
+    if (notification.title) {
+        title = notification.title;
+    }
+    if (notification.body) {
+        body = notification.body;
+    }
+
+    // Customize based on notification type
+    if (notificationType === 'message') {
+        title = data.senderName || notification.title || 'New Message';
+        body = data.messageText || notification.body || 'You have a new message';
+    } else if (notificationType === 'call') {
+        title = '📞 Incoming Call';
+        body = `${data.callerName || 'Someone'} is calling...`;
         options.requireInteraction = true;
         options.vibrate = [500, 200, 500, 200, 500];
         options.actions = [
@@ -76,21 +104,26 @@ messaging.onBackgroundMessage((payload) => {
             { action: 'decline', title: '❌ Decline' }
         ];
     } else if (notificationType === 'missed_call') {
-        title = notification.title || '📵 Missed Call';
-    } else if (notificationType === 'message') {
-        title = data.senderName || notification.title || 'New Message';
-        options.body = data.messageText || notification.body || 'You have a new message';
+        title = '📵 Missed Call';
+        body = `Missed call from ${data.callerName || 'Unknown'}`;
     }
 
-    console.log('[SW] Showing notification:', title);
-    return self.registration.showNotification(title, options);
+    options.body = body;
+
+    console.log('[SW] Showing notification:', title, body);
+
+    // IMPORTANT: We MUST show a notification for every push event on iOS Safari
+    // Otherwise push permission may be revoked!
+    event.waitUntil(
+        self.registration.showNotification(title, options)
+    );
 });
 
 // ============================================
 // NOTIFICATION CLICK HANDLER
 // ============================================
 
-self.addEventListener('notificationclick', (event) => {
+self.addEventListener('notificationclick', function (event) {
     console.log('[SW] Notification clicked');
 
     const notification = event.notification;
@@ -112,9 +145,11 @@ self.addEventListener('notificationclick', (event) => {
 
     event.waitUntil(
         clients.matchAll({ type: 'window', includeUncontrolled: true })
-            .then((windowClients) => {
-                for (const client of windowClients) {
-                    if (client.url.includes(self.registration.scope) && 'focus' in client) {
+            .then(function (windowClients) {
+                // Try to focus existing window
+                for (let i = 0; i < windowClients.length; i++) {
+                    const client = windowClients[i];
+                    if ('focus' in client) {
                         client.postMessage({
                             type: 'notification-click',
                             data: data,
@@ -123,6 +158,7 @@ self.addEventListener('notificationclick', (event) => {
                         return client.focus();
                     }
                 }
+                // Open new window if none exists
                 if (clients.openWindow) {
                     return clients.openWindow(urlToOpen);
                 }
@@ -134,49 +170,51 @@ self.addEventListener('notificationclick', (event) => {
 // PWA LIFECYCLE EVENTS
 // ============================================
 
-self.addEventListener('install', (event) => {
-    console.log('[SW] Installing service worker v3...');
+self.addEventListener('install', function (event) {
+    console.log('[SW] Installing service worker v4...');
 
     event.waitUntil(
         caches.open(CACHE_NAME)
-            .then((cache) => {
+            .then(function (cache) {
                 console.log('[SW] Caching essential resources');
                 return cache.addAll(ESSENTIAL_RESOURCES);
             })
-            .then(() => {
-                console.log('[SW] Service worker installed');
+            .then(function () {
+                console.log('[SW] Service worker v4 installed');
                 return self.skipWaiting();
             })
-            .catch((error) => {
+            .catch(function (error) {
                 console.error('[SW] Failed to cache:', error);
             })
     );
 });
 
-self.addEventListener('activate', (event) => {
-    console.log('[SW] Activating service worker v3...');
+self.addEventListener('activate', function (event) {
+    console.log('[SW] Activating service worker v4...');
 
     event.waitUntil(
         caches.keys()
-            .then((cacheNames) => {
+            .then(function (cacheNames) {
                 return Promise.all(
                     cacheNames
-                        .filter((name) => name.startsWith('chatapp-cache-') && name !== CACHE_NAME)
-                        .map((name) => {
+                        .filter(function (name) {
+                            return name.startsWith('chatapp-cache-') && name !== CACHE_NAME;
+                        })
+                        .map(function (name) {
                             console.log('[SW] Deleting old cache:', name);
                             return caches.delete(name);
                         })
                 );
             })
-            .then(() => {
-                console.log('[SW] Service worker activated');
+            .then(function () {
+                console.log('[SW] Service worker v4 activated');
                 return self.clients.claim();
             })
     );
 });
 
 // Fetch handler for caching
-self.addEventListener('fetch', (event) => {
+self.addEventListener('fetch', function (event) {
     if (event.request.method !== 'GET') return;
 
     const url = new URL(event.request.url);
@@ -187,33 +225,43 @@ self.addEventListener('fetch', (event) => {
     if (event.request.mode === 'navigate') {
         event.respondWith(
             fetch(event.request)
-                .catch(() => caches.match(event.request).then((cached) => cached || caches.match('/')))
+                .catch(function () {
+                    return caches.match(event.request)
+                        .then(function (cached) {
+                            return cached || caches.match('/');
+                        });
+                })
         );
         return;
     }
 
     event.respondWith(
         caches.match(event.request)
-            .then((cached) => {
+            .then(function (cached) {
                 if (cached) {
+                    // Update cache in background
                     fetch(event.request)
-                        .then((response) => {
+                        .then(function (response) {
                             if (response && response.status === 200) {
-                                caches.open(CACHE_NAME).then((cache) => cache.put(event.request, response));
+                                caches.open(CACHE_NAME)
+                                    .then(function (cache) {
+                                        cache.put(event.request, response);
+                                    });
                             }
                         })
-                        .catch(() => { });
+                        .catch(function () { });
                     return cached;
                 }
                 return fetch(event.request)
-                    .then((response) => {
+                    .then(function (response) {
                         if (response && response.status === 200) {
                             const clone = response.clone();
-                            caches.open(CACHE_NAME).then((cache) => {
-                                if (event.request.url.match(/\.(js|css|png|jpg|jpeg|gif|svg|woff2?)$/)) {
-                                    cache.put(event.request, clone);
-                                }
-                            });
+                            caches.open(CACHE_NAME)
+                                .then(function (cache) {
+                                    if (event.request.url.match(/\.(js|css|png|jpg|jpeg|gif|svg|woff2?)$/)) {
+                                        cache.put(event.request, clone);
+                                    }
+                                });
                         }
                         return response;
                     });
@@ -221,4 +269,4 @@ self.addEventListener('fetch', (event) => {
     );
 });
 
-console.log('[SW] Firebase messaging service worker v3 loaded');
+console.log('[SW] Firebase messaging service worker v4 loaded (iOS Safari compatible)');
