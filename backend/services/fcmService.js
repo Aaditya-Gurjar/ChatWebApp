@@ -28,16 +28,71 @@ const sendToUser = async (userId, notification, data = {}) => {
         const tokens = user.fcmTokens.map(t => t.token);
         console.log(`FCM: Sending to ${tokens.length} device(s) for user ${userId}`);
 
-        // Send to all user's devices
+        // Convert all data values to strings (FCM requirement)
+        const stringData = Object.keys(data).reduce((acc, key) => {
+            acc[key] = String(data[key]);
+            return acc;
+        }, {});
+
+        // Build the message with platform-specific configurations
+        // This is critical for iOS Safari PWA push notifications!
         const message = {
-            notification,
-            data: {
-                ...data,
-                // Ensure all data values are strings (FCM requirement)
-                ...(Object.keys(data).reduce((acc, key) => {
-                    acc[key] = String(data[key]);
-                    return acc;
-                }, {}))
+            notification: {
+                title: notification.title,
+                body: notification.body,
+            },
+            data: stringData,
+            // Web Push configuration (for PWAs including iOS Safari)
+            webpush: {
+                notification: {
+                    title: notification.title,
+                    body: notification.body,
+                    icon: '/pwa-icons/icon-192x192.png',
+                    badge: '/pwa-icons/icon-96x96.png',
+                    vibrate: [200, 100, 200],
+                    requireInteraction: data.type === 'call',
+                    tag: data.type === 'message' ? `message-${data.chatId}` :
+                        data.type === 'call' ? `call-${data.callId}` : 'notification',
+                    renotify: true,
+                    data: stringData
+                },
+                fcmOptions: {
+                    link: '/'
+                },
+                headers: {
+                    'Urgency': 'high',
+                    'TTL': '86400'
+                }
+            },
+            // APNS configuration (for iOS devices including Safari PWA)
+            apns: {
+                headers: {
+                    'apns-priority': '10',
+                    'apns-push-type': 'alert'
+                },
+                payload: {
+                    aps: {
+                        alert: {
+                            title: notification.title,
+                            body: notification.body
+                        },
+                        badge: 1,
+                        sound: 'default',
+                        'mutable-content': 1,
+                        'content-available': 1
+                    },
+                    ...stringData
+                }
+            },
+            // Android configuration
+            android: {
+                priority: 'high',
+                notification: {
+                    icon: 'ic_notification',
+                    color: '#3b82f6',
+                    sound: 'default',
+                    channelId: 'chat_messages'
+                }
             },
             tokens
         };
@@ -45,6 +100,15 @@ const sendToUser = async (userId, notification, data = {}) => {
         const response = await messaging.sendEachForMulticast(message);
 
         console.log(`FCM: ${response.successCount} successful, ${response.failureCount} failed`);
+
+        // Log detailed errors for debugging
+        if (response.failureCount > 0) {
+            response.responses.forEach((resp, idx) => {
+                if (!resp.success) {
+                    console.error(`FCM: Token ${idx} failed:`, resp.error?.code, resp.error?.message);
+                }
+            });
+        }
 
         // Handle failed tokens (remove invalid ones)
         if (response.failureCount > 0) {

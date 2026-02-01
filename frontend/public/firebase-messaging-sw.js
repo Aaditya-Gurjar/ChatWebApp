@@ -35,17 +35,17 @@ firebase.initializeApp(firebaseConfig);
 // Get messaging instance
 const messaging = firebase.messaging();
 
-// Handle background messages
+// Handle background messages (Firebase SDK)
 messaging.onBackgroundMessage((payload) => {
-    console.log('[SW] Background message received:', payload);
+    console.log('[SW] Background message received via Firebase:', payload);
 
     const notificationData = payload.data || {};
     const notificationType = notificationData.type || 'message';
 
     let notificationTitle = 'New Notification';
     let notificationOptions = {
-        icon: '/logo.jpeg',
-        badge: '/logo.jpeg',
+        icon: '/pwa-icons/icon-192x192.png',
+        badge: '/pwa-icons/icon-96x96.png',
         vibrate: [200, 100, 200],
         requireInteraction: false,
         data: notificationData
@@ -75,6 +75,78 @@ messaging.onBackgroundMessage((payload) => {
 
     // Show the notification
     return self.registration.showNotification(notificationTitle, notificationOptions);
+});
+
+// ============================================
+// DIRECT PUSH EVENT HANDLER (iOS Safari PWA Fallback)
+// ============================================
+// This is critical for iOS Safari PWAs where Firebase's onBackgroundMessage
+// may not fire reliably. The push event is the standard Web Push API event.
+
+self.addEventListener('push', (event) => {
+    console.log('[SW] Push event received:', event);
+
+    // Prevent the default Firebase handling if we want to handle it ourselves
+    // Check if we have data in the push event
+    let payload = {};
+
+    try {
+        if (event.data) {
+            payload = event.data.json();
+            console.log('[SW] Push payload:', payload);
+        }
+    } catch (e) {
+        console.log('[SW] Could not parse push data:', e);
+        // Try to get text data
+        if (event.data) {
+            console.log('[SW] Push data as text:', event.data.text());
+        }
+    }
+
+    // If Firebase SDK already handled this (has notification field from FCM), 
+    // it will show a notification. But for iOS Safari PWA, we need to ensure
+    // a notification is always shown when the push event fires.
+
+    // Check if this is an FCM message with webpush notification already set
+    // In that case, the notification might already be shown by the browser
+    const notification = payload.notification || {};
+    const data = payload.data || {};
+
+    // Determine notification content
+    let title = notification.title || 'ChatApp';
+    let body = notification.body || 'You have a new notification';
+    let options = {
+        body: body,
+        icon: '/pwa-icons/icon-192x192.png',
+        badge: '/pwa-icons/icon-96x96.png',
+        vibrate: [200, 100, 200],
+        data: data,
+        requireInteraction: data.type === 'call',
+        tag: data.type === 'message' ? `message-${data.chatId || 'default'}` :
+            data.type === 'call' ? `call-${data.callId || 'default'}` :
+                `notification-${Date.now()}`
+    };
+
+    // Customize based on notification type
+    if (data.type === 'message') {
+        title = data.senderName || title;
+        options.body = data.messageText || body;
+        options.renotify = true;
+    } else if (data.type === 'call') {
+        title = 'Incoming Call';
+        options.body = `${data.callerName || 'Someone'} is calling...`;
+        options.vibrate = [300, 100, 300, 100, 300];
+        options.requireInteraction = true;
+    } else if (data.type === 'missed_call') {
+        title = 'Missed Call';
+        options.body = `Missed call from ${data.callerName || 'Unknown'}`;
+    }
+
+    // CRITICAL: For iOS Safari PWA, we MUST show a notification
+    // or the push permission may be revoked
+    event.waitUntil(
+        self.registration.showNotification(title, options)
+    );
 });
 
 // Handle notification click
