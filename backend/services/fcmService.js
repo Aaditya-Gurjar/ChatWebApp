@@ -34,28 +34,29 @@ const sendToUser = async (userId, notification, data = {}) => {
             return acc;
         }, {});
 
-        // Add notification info to data so service worker can display it
-        stringData.notificationTitle = notification.title;
-        stringData.notificationBody = notification.body;
+        // Create consistent tag for deduplication (CRITICAL!)
+        // Same tag = notifications replace each other instead of stacking
+        const notificationTag = `${data.type || 'notification'}-${data.chatId || data.callId || Date.now()}`;
 
-        // Build the message - DATA ONLY (no top-level notification)
-        // This prevents the browser from auto-showing a notification
-        // Our service worker handles the display to prevent duplicates
+        // Build the message with FULL notification payload
+        // iOS Safari requires the notification object to trigger push events
         const message = {
-            // NO top-level 'notification' object - this is intentional!
-            // Including it causes the browser to auto-show a notification
+            // Top-level notification for iOS Safari compatibility
+            notification: {
+                title: notification.title,
+                body: notification.body,
+            },
             data: stringData,
             // Web Push configuration (for PWAs including iOS Safari)
             webpush: {
-                // Notification details for web push
                 notification: {
                     title: notification.title,
                     body: notification.body,
                     icon: '/pwa-icons/icon-192x192.png',
                     badge: '/pwa-icons/icon-96x96.png',
-                    tag: data.type === 'message' ? `message-${data.chatId}` :
-                        data.type === 'call' ? `call-${data.callId}` :
-                            `notification-${Date.now()}`
+                    // TAG is the key to preventing duplicates!
+                    tag: notificationTag,
+                    renotify: true,  // Still vibrate/sound on update
                 },
                 fcmOptions: {
                     link: '/'
@@ -65,11 +66,12 @@ const sendToUser = async (userId, notification, data = {}) => {
                     'TTL': '86400'
                 }
             },
-            // APNS configuration (for iOS devices)
+            // APNS configuration (for iOS native apps, but also helps Safari)
             apns: {
                 headers: {
                     'apns-priority': '10',
-                    'apns-push-type': 'alert'
+                    'apns-push-type': 'alert',
+                    'apns-collapse-id': notificationTag  // iOS equivalent of tag
                 },
                 payload: {
                     aps: {
@@ -79,15 +81,22 @@ const sendToUser = async (userId, notification, data = {}) => {
                         },
                         badge: 1,
                         sound: 'default',
-                        'mutable-content': 1
+                        'mutable-content': 1,
+                        'thread-id': notificationTag  // Groups notifications
                     }
                 }
             },
-            // Android configuration  
+            // Android configuration
             android: {
                 priority: 'high',
-                // Use data message for Android too (no notification object)
-                // This gives our app full control
+                collapseKey: notificationTag,  // Android equivalent of tag
+                notification: {
+                    icon: 'ic_notification',
+                    color: '#3b82f6',
+                    sound: 'default',
+                    tag: notificationTag,
+                    channelId: data.type === 'call' ? 'calls' : 'messages'
+                }
             },
             tokens
         };
@@ -172,7 +181,7 @@ const sendCallNotification = async (recipientUserId, callData) => {
     const { callerName, callerImage, callId, callType } = callData;
 
     const notification = {
-        title: 'Incoming Call',
+        title: '📞 Incoming Call',
         body: `${callerName} is calling...`,
     };
 
@@ -196,7 +205,7 @@ const sendMissedCallNotification = async (recipientUserId, callData) => {
     const { callerName, callId, callType } = callData;
 
     const notification = {
-        title: 'Missed Call',
+        title: '📵 Missed Call',
         body: `Missed ${callType} call from ${callerName}`,
     };
 

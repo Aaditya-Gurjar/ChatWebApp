@@ -2,9 +2,8 @@
 // This handles background push notifications and PWA caching
 
 // PWA Cache Configuration
-const CACHE_VERSION = 'v1';
+const CACHE_VERSION = 'v2';  // Incremented to force update
 const CACHE_NAME = `chatapp-cache-${CACHE_VERSION}`;
-const OFFLINE_URL = '/offline.html';
 
 // Resources to cache for offline access
 const ESSENTIAL_RESOURCES = [
@@ -35,102 +34,86 @@ firebase.initializeApp(firebaseConfig);
 // Get messaging instance
 const messaging = firebase.messaging();
 
-// Track shown notifications to prevent duplicates
-const shownNotifications = new Set();
-
 // ============================================
-// UNIFIED PUSH HANDLER - Prevents Duplicate Notifications
+// PUSH EVENT HANDLER
 // ============================================
-// We use ONLY the push event handler to ensure single notification
-// The Firebase SDK will receive the message but we handle display ourselves
+// This is the ONLY handler we use. The backend sends notifications with `tag`
+// which prevents duplicate notifications at the system level.
+// We customize the notification display here.
 
 self.addEventListener('push', (event) => {
     console.log('[SW] Push event received');
 
-    let payload = {};
-    try {
-        if (event.data) {
-            payload = event.data.json();
-            console.log('[SW] Push payload:', JSON.stringify(payload));
-        }
-    } catch (e) {
-        console.log('[SW] Could not parse push data:', e);
-        return; // Don't show notification if we can't parse data
-    }
-
-    // Extract notification and data from payload
-    // FCM sends data in different formats depending on configuration
-    const fcmNotification = payload.notification || {};
-    const fcmData = payload.data || {};
-
-    // Create unique notification ID to prevent duplicates
-    const notificationType = fcmData.type || 'notification';
-    const notificationId = fcmData.chatId || fcmData.callId || Date.now().toString();
-    const uniqueKey = `${notificationType}-${notificationId}`;
-
-    // Skip if we already showed this notification recently (within 5 seconds)
-    if (shownNotifications.has(uniqueKey)) {
-        console.log('[SW] Skipping duplicate notification:', uniqueKey);
+    if (!event.data) {
+        console.log('[SW] No data in push event');
         return;
     }
 
-    // Mark as shown (auto-cleanup after 5 seconds)
-    shownNotifications.add(uniqueKey);
-    setTimeout(() => shownNotifications.delete(uniqueKey), 5000);
-
-    // Build notification based on type
-    let title = 'ChatApp';
-    let options = {
-        icon: '/pwa-icons/icon-192x192.png',
-        badge: '/pwa-icons/icon-96x96.png',
-        data: fcmData,
-        tag: uniqueKey, // Using tag prevents duplicate system notifications
-        renotify: true
-    };
-
-    if (notificationType === 'message') {
-        // Message notification
-        title = fcmData.senderName || fcmNotification.title || 'New Message';
-        options.body = fcmData.messageText || fcmNotification.body || 'You have a new message';
-        options.vibrate = [200, 100, 200];
-
-    } else if (notificationType === 'call') {
-        // Incoming call notification - Make it distinctive!
-        title = '📞 Incoming Call';
-        options.body = `${fcmData.callerName || 'Someone'} is calling you...`;
-        options.vibrate = [500, 200, 500, 200, 500, 200, 500]; // Long vibration pattern
-        options.requireInteraction = true; // Keep visible until user interacts
-        options.silent = false;
-        options.actions = [
-            { action: 'answer', title: '✅ Answer', icon: '/pwa-icons/icon-96x96.png' },
-            { action: 'decline', title: '❌ Decline' }
-        ];
-        // Use a sound-indicating icon for calls
-        options.icon = '/pwa-icons/icon-192x192.png';
-
-    } else if (notificationType === 'missed_call') {
-        // Missed call notification
-        title = '📵 Missed Call';
-        options.body = `You missed a call from ${fcmData.callerName || 'Unknown'}`;
-        options.vibrate = [200, 100, 200];
-
-    } else {
-        // Generic notification - use FCM payload directly
-        title = fcmNotification.title || 'ChatApp';
-        options.body = fcmNotification.body || 'You have a new notification';
-        options.vibrate = [200, 100, 200];
+    let payload = {};
+    try {
+        payload = event.data.json();
+        console.log('[SW] Push payload received');
+    } catch (e) {
+        console.error('[SW] Could not parse push data:', e);
+        return;
     }
 
-    console.log('[SW] Showing notification:', title, options.body);
+    // FCM sends data in the 'data' field and notification info in 'notification'
+    const fcmNotification = payload.notification || {};
+    const fcmData = payload.data || {};
 
+    // Determine notification type
+    const notificationType = fcmData.type || 'notification';
+
+    // Create tag (same format as backend for consistency)
+    const tag = `${notificationType}-${fcmData.chatId || fcmData.callId || Date.now()}`;
+
+    // Build notification options
+    let title = fcmNotification.title || 'ChatApp';
+    let options = {
+        body: fcmNotification.body || 'You have a new notification',
+        icon: '/pwa-icons/icon-192x192.png',
+        badge: '/pwa-icons/icon-96x96.png',
+        tag: tag,  // CRITICAL: prevents duplicate notifications
+        renotify: true,  // Vibrate even if replacing existing notification
+        data: fcmData,
+        vibrate: [200, 100, 200]
+    };
+
+    // Customize based on notification type
+    if (notificationType === 'call') {
+        // Incoming call - make it distinctive
+        title = fcmNotification.title || '📞 Incoming Call';
+        options.body = fcmNotification.body || `${fcmData.callerName || 'Someone'} is calling...`;
+        options.requireInteraction = true;  // Keep visible until user interacts
+        options.vibrate = [500, 200, 500, 200, 500];  // Longer vibration
+        options.actions = [
+            { action: 'answer', title: '✅ Answer' },
+            { action: 'decline', title: '❌ Decline' }
+        ];
+    } else if (notificationType === 'missed_call') {
+        title = fcmNotification.title || '📵 Missed Call';
+        options.body = fcmNotification.body || `Missed call from ${fcmData.callerName || 'Unknown'}`;
+    } else if (notificationType === 'message') {
+        // Message notification - use sender name as title
+        title = fcmData.senderName || fcmNotification.title || 'New Message';
+        options.body = fcmData.messageText || fcmNotification.body || 'You have a new message';
+    }
+
+    console.log('[SW] Showing notification:', title);
+
+    // Show the notification
     event.waitUntil(
         self.registration.showNotification(title, options)
     );
 });
 
-// Handle notification click
+// ============================================
+// NOTIFICATION CLICK HANDLER
+// ============================================
+
 self.addEventListener('notificationclick', (event) => {
-    console.log('[SW] Notification clicked:', event);
+    console.log('[SW] Notification clicked');
 
     const notification = event.notification;
     const action = event.action;
@@ -138,32 +121,27 @@ self.addEventListener('notificationclick', (event) => {
 
     notification.close();
 
-    // Determine URL to open based on notification type and action
+    // Determine URL to open
     let urlToOpen = '/';
 
     if (data.type === 'message' && data.chatId) {
         urlToOpen = `/?chat=${data.chatId}`;
     } else if (data.type === 'call') {
-        if (action === 'decline') {
-            // User declined - just open app
-            urlToOpen = '/';
-        } else if (action === 'answer') {
-            // User wants to answer
+        if (action === 'answer') {
             urlToOpen = `/?call=${data.callId}&action=answer`;
+        } else if (action === 'decline') {
+            urlToOpen = '/';
         } else {
-            // Clicked notification body - open to handle call
             urlToOpen = `/?call=${data.callId}`;
         }
     }
 
-    // Open or focus the app window
+    // Open or focus the app
     event.waitUntil(
         clients.matchAll({ type: 'window', includeUncontrolled: true })
             .then((windowClients) => {
-                // Check if there's already an open window
                 for (const client of windowClients) {
                     if (client.url.includes(self.registration.scope) && 'focus' in client) {
-                        // Post message to existing window about the notification action
                         client.postMessage({
                             type: 'notification-click',
                             data: data,
@@ -172,7 +150,6 @@ self.addEventListener('notificationclick', (event) => {
                         return client.focus();
                     }
                 }
-                // No open window, open a new one
                 if (clients.openWindow) {
                     return clients.openWindow(urlToOpen);
                 }
@@ -180,18 +157,12 @@ self.addEventListener('notificationclick', (event) => {
     );
 });
 
-// Handle notification close
-self.addEventListener('notificationclose', (event) => {
-    console.log('[SW] Notification closed:', event.notification.tag);
-});
-
 // ============================================
 // PWA LIFECYCLE EVENTS
 // ============================================
 
-// Install event - cache essential resources
 self.addEventListener('install', (event) => {
-    console.log('[SW] Installing service worker...');
+    console.log('[SW] Installing service worker v2...');
 
     event.waitUntil(
         caches.open(CACHE_NAME)
@@ -200,19 +171,17 @@ self.addEventListener('install', (event) => {
                 return cache.addAll(ESSENTIAL_RESOURCES);
             })
             .then(() => {
-                console.log('[SW] Essential resources cached');
-                // Skip waiting to activate immediately
+                console.log('[SW] Service worker installed');
                 return self.skipWaiting();
             })
             .catch((error) => {
-                console.error('[SW] Failed to cache resources:', error);
+                console.error('[SW] Failed to cache:', error);
             })
     );
 });
 
-// Activate event - clean up old caches
 self.addEventListener('activate', (event) => {
-    console.log('[SW] Activating service worker...');
+    console.log('[SW] Activating service worker v2...');
 
     event.waitUntil(
         caches.keys()
@@ -228,66 +197,50 @@ self.addEventListener('activate', (event) => {
             })
             .then(() => {
                 console.log('[SW] Service worker activated');
-                // Take control of all clients immediately
                 return self.clients.claim();
             })
     );
 });
 
-// Fetch event - network first, fallback to cache
+// Fetch handler for caching
 self.addEventListener('fetch', (event) => {
-    // Skip non-GET requests
     if (event.request.method !== 'GET') return;
 
-    // Skip cross-origin requests (except for CDN assets)
     const url = new URL(event.request.url);
     if (url.origin !== location.origin && !url.hostname.includes('gstatic.com')) {
         return;
     }
 
-    // For navigation requests (HTML pages), use network-first strategy
     if (event.request.mode === 'navigate') {
         event.respondWith(
             fetch(event.request)
-                .catch(() => {
-                    // If offline, try to return cached version or offline page
-                    return caches.match(event.request)
-                        .then((cached) => cached || caches.match('/'));
-                })
+                .catch(() => caches.match(event.request).then((cached) => cached || caches.match('/')))
         );
         return;
     }
 
-    // For other requests, use cache-first strategy for performance
     event.respondWith(
         caches.match(event.request)
             .then((cached) => {
                 if (cached) {
-                    // Return cached version and update cache in background
                     fetch(event.request)
                         .then((response) => {
                             if (response && response.status === 200) {
-                                caches.open(CACHE_NAME)
-                                    .then((cache) => cache.put(event.request, response));
+                                caches.open(CACHE_NAME).then((cache) => cache.put(event.request, response));
                             }
                         })
                         .catch(() => { });
                     return cached;
                 }
-
-                // Not cached, fetch from network
                 return fetch(event.request)
                     .then((response) => {
-                        // Cache successful responses for static assets
                         if (response && response.status === 200) {
-                            const responseClone = response.clone();
-                            caches.open(CACHE_NAME)
-                                .then((cache) => {
-                                    // Only cache static assets
-                                    if (event.request.url.match(/\.(js|css|png|jpg|jpeg|gif|svg|woff2?)$/)) {
-                                        cache.put(event.request, responseClone);
-                                    }
-                                });
+                            const clone = response.clone();
+                            caches.open(CACHE_NAME).then((cache) => {
+                                if (event.request.url.match(/\.(js|css|png|jpg|jpeg|gif|svg|woff2?)$/)) {
+                                    cache.put(event.request, clone);
+                                }
+                            });
                         }
                         return response;
                     });
@@ -295,4 +248,4 @@ self.addEventListener('fetch', (event) => {
     );
 });
 
-console.log('[SW] Firebase messaging service worker with PWA support loaded');
+console.log('[SW] Firebase messaging service worker v2 loaded');
