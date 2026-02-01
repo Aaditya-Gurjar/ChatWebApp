@@ -24,6 +24,12 @@ const userSchema = new mongoose.Schema(
 			default:
 				"https://icon-library.com/images/anonymous-avatar-icon/anonymous-avatar-icon-25.jpg",
 		},
+		// FCM tokens for push notifications (supports multiple devices)
+		fcmTokens: [{
+			token: { type: String, required: true },
+			device: { type: String }, // User agent or device identifier
+			createdAt: { type: Date, default: Date.now }
+		}],
 	},
 	{
 		timestamps: true,

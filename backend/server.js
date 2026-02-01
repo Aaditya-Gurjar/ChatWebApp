@@ -23,6 +23,14 @@ const authRouter = require("./routes/auth");
 const userRouter = require("./routes/user");
 const chatRouter = require("./routes/chat");
 const messageRouter = require("./routes/message");
+const fcmRouter = require("./routes/fcm");
+
+// FCM Service for push notifications
+const { sendMessageNotification, sendCallNotification } = require("./services/fcmService");
+const { initializeFirebaseAdmin } = require("./config/firebase");
+
+// Initialize Firebase Admin SDK
+initializeFirebaseAdmin();
 
 // Connect to Database
 main()
@@ -46,6 +54,7 @@ app.use("/api/auth", authRouter);
 app.use("/api/user", userRouter);
 app.use("/api/chat", chatRouter);
 app.use("/api/message", messageRouter);
+app.use("/api/fcm", fcmRouter);
 
 // Invaild routes
 app.all("*", (req, res) => {
@@ -93,6 +102,30 @@ io.on("connection", (socket) => {
 			if (user._id === newMessageReceived.sender._id) return;
 			console.log("Message received by:", user._id);
 			socket.in(user._id).emit("message received", newMessageReceived);
+
+			// Extract sender name - try different property names
+			const sender = newMessageReceived.sender;
+			let senderName = 'Someone';
+			if (sender) {
+				if (sender.firstName) {
+					senderName = `${sender.firstName} ${sender.lastName || ''}`.trim();
+				} else if (sender.name) {
+					senderName = sender.name;
+				}
+			}
+			console.log('FCM: Sender data:', { firstName: sender?.firstName, lastName: sender?.lastName, name: sender?.name });
+			console.log('FCM: Extracted senderName:', senderName);
+			console.log('FCM: Message text:', newMessageReceived.message || newMessageReceived.content);
+
+			// Send FCM push notification for offline users
+			sendMessageNotification(user._id, {
+				senderName: senderName,
+				senderImage: sender?.image || '',
+				messageText: newMessageReceived.message || newMessageReceived.content || 'New message',
+				chatId: chat._id,
+				chatName: chat.chatName || '',
+				isGroup: chat.isGroupChat || false
+			}).catch(err => console.log('FCM message notification error:', err));
 		});
 	};
 
@@ -150,13 +183,21 @@ io.on("connection", (socket) => {
 	// User initiates a call
 	socket.on("call:initiate", ({ to, from, callId, type, offer }) => {
 		console.log(`Call initiated from ${from._id} to ${to}`);
-		// Forward to recipient
+		// Forward to recipient via socket
 		socket.to(to).emit("call:incoming", {
 			from,
 			callId,
 			type,
 			offer,
 		});
+
+		// Send FCM push notification for incoming call
+		sendCallNotification(to, {
+			callerName: `${from.firstName} ${from.lastName || ''}`.trim(),
+			callerImage: from.image,
+			callId: callId,
+			callType: type
+		}).catch(err => console.log('FCM call notification error:', err));
 	});
 
 	// User accepts call

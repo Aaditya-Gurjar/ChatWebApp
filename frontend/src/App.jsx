@@ -17,6 +17,7 @@ import NotificationBox from "./components/NotificationBox";
 import CallWindow from "./components/call/CallWindow";
 import IncomingCallModal from "./components/call/IncomingCallModal";
 import { CallProvider } from "./context/CallContext";
+import { useFCM } from "./hooks/useFCM";
 // import GroupChatBox from "./components/GroupChatBox";
 
 const Applayout = () => {
@@ -31,6 +32,9 @@ const Applayout = () => {
         (store) => store.condition.isNotificationBox
     );
     const isLoading = useSelector((store) => store.condition.isLoading);
+
+    // Initialize FCM for push notifications
+    const { permissionStatus, requestPermission, isSupported } = useFCM();
     useEffect(() => {
         const handleResize = () => {
             if (window.innerWidth >= 600) {
