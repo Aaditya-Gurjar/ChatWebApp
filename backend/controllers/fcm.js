@@ -3,6 +3,8 @@ const User = require('../models/user');
 
 /**
  * Register an FCM token for the authenticated user
+ * SINGLE DEVICE MODE: Replaces all existing tokens with the new one
+ * This ensures only the latest logged-in device receives notifications
  * POST /api/fcm/register-token
  */
 const registerToken = async (req, res) => {
@@ -20,24 +22,28 @@ const registerToken = async (req, res) => {
             return res.status(404).json({ message: 'User not found' });
         }
 
-        // Check if this token is already registered
-        const tokenExists = user.fcmTokens?.some(t => t.token === fcmToken);
+        // Check if this exact token is already the only registered token
+        const existingTokens = user.fcmTokens || [];
+        const tokenExists = existingTokens.length === 1 && existingTokens[0].token === fcmToken;
+
         if (tokenExists) {
             return res.status(200).json({ message: 'Token already registered' });
         }
 
-        // Add the new token
+        // SINGLE DEVICE MODE: Replace ALL existing tokens with the new one
+        // This ensures only the latest logged-in device receives notifications
         await User.findByIdAndUpdate(userId, {
-            $push: {
-                fcmTokens: {
+            $set: {
+                fcmTokens: [{
                     token: fcmToken,
                     device: req.headers['user-agent'] || 'unknown',
                     createdAt: new Date()
-                }
+                }]
             }
         });
 
-        console.log(`FCM token registered for user ${userId}`);
+        const removedCount = existingTokens.length;
+        console.log(`FCM: Token registered for user ${userId} (replaced ${removedCount} old token(s))`);
         return res.status(200).json({ message: 'Token registered successfully' });
     } catch (error) {
         console.error('Error registering FCM token:', error);
