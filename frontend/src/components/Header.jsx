@@ -67,8 +67,32 @@ const Header = () => {
 		handleScrollTop();
 	}, [pathname, user]);
 
-	const handleLogout = () => {
+	const handleLogout = async () => {
+		// First, unregister FCM token from backend BEFORE clearing localStorage
+		const fcmToken = localStorage.getItem('fcmToken');
+		const jwtToken = localStorage.getItem('token');
+
+		if (fcmToken && jwtToken) {
+			try {
+				await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/fcm/unregister-token`, {
+					method: 'DELETE',
+					headers: {
+						'Content-Type': 'application/json',
+						'Authorization': `Bearer ${jwtToken}`
+					},
+					body: JSON.stringify({ fcmToken })
+				});
+				console.log('FCM token unregistered on logout');
+			} catch (error) {
+				console.error('Error unregistering FCM token:', error);
+			}
+		}
+
+		// Clear all stored data
 		localStorage.removeItem("token");
+		localStorage.removeItem("fcmToken");
+
+		// Now reload
 		window.location.reload();
 		navigate("/signin");
 	};
@@ -135,11 +159,10 @@ const Header = () => {
 			{user ? (
 				<div className="flex flex-nowrap items-center">
 					<span
-						className={`whitespace-nowrap ml-2 flex items-center justify-center relative mr-1.5 cursor-pointer ${
-							newMessageRecieved.length > 0
+						className={`whitespace-nowrap ml-2 flex items-center justify-center relative mr-1.5 cursor-pointer ${newMessageRecieved.length > 0
 								? "animate-bounce"
 								: "animate-none"
-						}`}
+							}`}
 						title={`You have ${newMessageRecieved.length} new notifications`}
 						onClick={() => dispatch(setNotificationBox(true))}
 					>

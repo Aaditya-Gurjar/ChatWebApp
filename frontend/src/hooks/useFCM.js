@@ -131,6 +131,7 @@ export const useFCM = () => {
             if (token) {
                 console.log('🔔 FCM: Token obtained successfully');
                 setFcmToken(token);
+                localStorage.setItem('fcmToken', token); // Save for logout
                 await registerToken(token);
             } else {
                 console.warn('🔔 FCM: Failed to get token');
@@ -148,6 +149,7 @@ export const useFCM = () => {
                     if (token) {
                         console.log('🔔 FCM: Token obtained after permission grant');
                         setFcmToken(token);
+                        localStorage.setItem('fcmToken', token); // Save for logout
                         await registerToken(token);
                         toast.success('Notifications enabled!');
                     }
@@ -178,6 +180,7 @@ export const useFCM = () => {
             const token = await getFCMToken();
             if (token) {
                 setFcmToken(token);
+                localStorage.setItem('fcmToken', token); // Save for logout
                 await registerToken(token);
                 toast.success('Notifications enabled!');
             }
