@@ -1,5 +1,6 @@
 import React, { useEffect } from "react";
 import { FaPenAlt } from "react-icons/fa";
+import { IoMdRefresh } from "react-icons/io";
 import { addMyChat, addSelectedChat } from "../../redux/slices/myChatSlice";
 import { useDispatch, useSelector } from "react-redux";
 import {
@@ -49,7 +50,16 @@ const MyChat = () => {
     return (
         <>
             <div className="p-6 w-full h-[7vh] font-semibold flex justify-between items-center bg-slate-800 text-white border-slate-500 border-r">
-                <h1 className="mr-2 whitespace-nowrap">My Chat</h1>
+                <div className="flex items-center gap-2">
+                    <h1 className="mr-2 whitespace-nowrap">My Chat</h1>
+                    <button
+                        onClick={() => window.location.reload()}
+                        title="Refresh"
+                        className="p-1 rounded-full hover:bg-slate-600 active:bg-black/20 transition-all"
+                    >
+                        <IoMdRefresh fontSize={20} />
+                    </button>
+                </div>
                 <div
                     className="flex items-center gap-2 border border-slate-600 py-1 px-2 rounded-md cursor-pointer hover:bg-slate-600 active:bg-black/20"
                     title="Create New Group"
@@ -77,11 +87,10 @@ const MyChat = () => {
                             return (
                                 <div
                                     key={chat?._id}
-                                    className={`w-full h-16 border-slate-500 border rounded-lg flex justify-start items-center p-2 font-semibold gap-2 hover:bg-black/55 to-slate-800  via-slate-300  from-slate-800 transition-all cursor-pointer ${
-                                        selectedChat?._id == chat?._id
-                                            ? "bg-gradient-to-tr text-black"
-                                            : "text-white"
-                                    }`}
+                                    className={`w-full h-16 border-slate-500 border rounded-lg flex justify-start items-center p-2 font-semibold gap-2 hover:bg-black/55 to-slate-800  via-slate-300  from-slate-800 transition-all cursor-pointer ${selectedChat?._id == chat?._id
+                                        ? "bg-gradient-to-tr text-black"
+                                        : "text-white"
+                                        }`}
                                     onClick={() => {
                                         dispatch(addSelectedChat(chat));
                                     }}
@@ -111,11 +120,11 @@ const MyChat = () => {
                                                         {chat?.latestMessage
                                                             ?.sender?._id ===
                                                             authUserId && (
-                                                            <VscCheckAll
-                                                                color="white"
-                                                                fontSize={14}
-                                                            />
-                                                        )}
+                                                                <VscCheckAll
+                                                                    color="white"
+                                                                    fontSize={14}
+                                                                />
+                                                            )}
                                                     </span>
                                                     <span className="line-clamp-1">
                                                         {
