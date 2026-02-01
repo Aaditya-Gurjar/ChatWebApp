@@ -26,11 +26,63 @@ const messageRouter = require("./routes/message");
 const fcmRouter = require("./routes/fcm");
 
 // FCM Service for push notifications
-const { sendMessageNotification, sendCallNotification } = require("./services/fcmService");
+const { sendMessageNotification, sendCallNotification, sendMissedCallNotification } = require("./services/fcmService");
 const { initializeFirebaseAdmin } = require("./config/firebase");
 
 // Initialize Firebase Admin SDK
 initializeFirebaseAdmin();
+
+// ============ CALL RINGING MANAGER ============
+// Sends repeated notifications for incoming calls (for iOS Safari PWA)
+// Uses same notification tag so they replace each other (not stack)
+const activeCallRings = new Map(); // callId -> { interval, timeout, recipientId, callerInfo }
+
+function startCallRinging(recipientId, callData) {
+	const { callId } = callData;
+
+	// Don't start if already ringing
+	if (activeCallRings.has(callId)) {
+		return;
+	}
+
+	console.log(`📞 Starting call ringing for ${callId}`);
+
+	// Send first notification immediately
+	sendCallNotification(recipientId, callData)
+		.catch(err => console.log('FCM call notification error:', err));
+
+	// Repeat notification every 3 seconds
+	const ringInterval = setInterval(() => {
+		console.log(`📞 Ring repeat for ${callId}`);
+		sendCallNotification(recipientId, callData)
+			.catch(err => console.log('FCM call ring error:', err));
+	}, 3000);
+
+	// Auto-stop after 30 seconds and send missed call
+	const ringTimeout = setTimeout(() => {
+		console.log(`📵 Call ${callId} timed out - missed call`);
+		stopCallRinging(callId);
+		sendMissedCallNotification(recipientId, callData)
+			.catch(err => console.log('FCM missed call error:', err));
+	}, 30000);
+
+	activeCallRings.set(callId, {
+		interval: ringInterval,
+		timeout: ringTimeout,
+		recipientId,
+		callerInfo: callData
+	});
+}
+
+function stopCallRinging(callId) {
+	const ring = activeCallRings.get(callId);
+	if (ring) {
+		console.log(`🔕 Stopping call ringing for ${callId}`);
+		clearInterval(ring.interval);
+		clearTimeout(ring.timeout);
+		activeCallRings.delete(callId);
+	}
+}
 
 // Connect to Database
 main()
@@ -212,18 +264,21 @@ io.on("connection", (socket) => {
 			offer,
 		});
 
-		// Send FCM push notification for incoming call
-		sendCallNotification(to, {
+		// Start repeated call ringing (for iOS Safari PWA)
+		// Sends notification every 3 seconds until answered/rejected
+		startCallRinging(to, {
 			callerName: `${from.firstName} ${from.lastName || ''}`.trim(),
 			callerImage: from.image,
 			callId: callId,
 			callType: type
-		}).catch(err => console.log('FCM call notification error:', err));
+		});
 	});
 
 	// User accepts call
 	socket.on("call:accept", ({ to, answer, callId }) => {
 		console.log(`Call ${callId} accepted, sending answer to user: ${to}`);
+		// Stop call ringing
+		stopCallRinging(callId);
 		// Forward answer to caller
 		socket.to(to).emit("call:accepted", {
 			answer,
@@ -235,6 +290,8 @@ io.on("connection", (socket) => {
 	// User rejects call
 	socket.on("call:reject", ({ to, callId }) => {
 		console.log(`Call ${callId} rejected`);
+		// Stop call ringing
+		stopCallRinging(callId);
 		socket.to(to).emit("call:rejected", { callId });
 	});
 
@@ -249,11 +306,15 @@ io.on("connection", (socket) => {
 	// End call
 	socket.on("call:end", ({ to, callId }) => {
 		console.log(`Call ${callId} ended`);
+		// Stop call ringing (in case call ended before answered)
+		stopCallRinging(callId);
 		socket.to(to).emit("call:ended", { callId });
 	});
 
 	// User is busy (already on another call)
 	socket.on("call:busy", ({ to, callId }) => {
+		// Stop call ringing
+		stopCallRinging(callId);
 		socket.to(to).emit("call:busy", { callId });
 	});
 
