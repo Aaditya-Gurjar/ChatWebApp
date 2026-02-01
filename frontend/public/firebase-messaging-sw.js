@@ -35,115 +35,94 @@ firebase.initializeApp(firebaseConfig);
 // Get messaging instance
 const messaging = firebase.messaging();
 
-// Handle background messages (Firebase SDK)
-messaging.onBackgroundMessage((payload) => {
-    console.log('[SW] Background message received via Firebase:', payload);
-
-    const notificationData = payload.data || {};
-    const notificationType = notificationData.type || 'message';
-
-    let notificationTitle = 'New Notification';
-    let notificationOptions = {
-        icon: '/pwa-icons/icon-192x192.png',
-        badge: '/pwa-icons/icon-96x96.png',
-        vibrate: [200, 100, 200],
-        requireInteraction: false,
-        data: notificationData
-    };
-
-    // Handle different notification types
-    if (notificationType === 'message') {
-        notificationTitle = notificationData.senderName || 'New Message';
-        notificationOptions.body = notificationData.messageText || 'You have a new message';
-        notificationOptions.tag = `message-${notificationData.chatId}`;
-        notificationOptions.renotify = true;
-    } else if (notificationType === 'call') {
-        notificationTitle = 'Incoming Call';
-        notificationOptions.body = `${notificationData.callerName || 'Someone'} is calling...`;
-        notificationOptions.tag = `call-${notificationData.callId}`;
-        notificationOptions.requireInteraction = true; // Keep call notification visible
-        notificationOptions.vibrate = [300, 100, 300, 100, 300]; // Longer vibration for calls
-        notificationOptions.actions = [
-            { action: 'answer', title: '📞 Answer' },
-            { action: 'decline', title: '❌ Decline' }
-        ];
-    } else if (notificationType === 'missed_call') {
-        notificationTitle = 'Missed Call';
-        notificationOptions.body = `Missed call from ${notificationData.callerName || 'Unknown'}`;
-        notificationOptions.tag = `missed-call-${notificationData.callId}`;
-    }
-
-    // Show the notification
-    return self.registration.showNotification(notificationTitle, notificationOptions);
-});
+// Track shown notifications to prevent duplicates
+const shownNotifications = new Set();
 
 // ============================================
-// DIRECT PUSH EVENT HANDLER (iOS Safari PWA Fallback)
+// UNIFIED PUSH HANDLER - Prevents Duplicate Notifications
 // ============================================
-// This is critical for iOS Safari PWAs where Firebase's onBackgroundMessage
-// may not fire reliably. The push event is the standard Web Push API event.
+// We use ONLY the push event handler to ensure single notification
+// The Firebase SDK will receive the message but we handle display ourselves
 
 self.addEventListener('push', (event) => {
-    console.log('[SW] Push event received:', event);
+    console.log('[SW] Push event received');
 
-    // Prevent the default Firebase handling if we want to handle it ourselves
-    // Check if we have data in the push event
     let payload = {};
-
     try {
         if (event.data) {
             payload = event.data.json();
-            console.log('[SW] Push payload:', payload);
+            console.log('[SW] Push payload:', JSON.stringify(payload));
         }
     } catch (e) {
         console.log('[SW] Could not parse push data:', e);
-        // Try to get text data
-        if (event.data) {
-            console.log('[SW] Push data as text:', event.data.text());
-        }
+        return; // Don't show notification if we can't parse data
     }
 
-    // If Firebase SDK already handled this (has notification field from FCM), 
-    // it will show a notification. But for iOS Safari PWA, we need to ensure
-    // a notification is always shown when the push event fires.
+    // Extract notification and data from payload
+    // FCM sends data in different formats depending on configuration
+    const fcmNotification = payload.notification || {};
+    const fcmData = payload.data || {};
 
-    // Check if this is an FCM message with webpush notification already set
-    // In that case, the notification might already be shown by the browser
-    const notification = payload.notification || {};
-    const data = payload.data || {};
+    // Create unique notification ID to prevent duplicates
+    const notificationType = fcmData.type || 'notification';
+    const notificationId = fcmData.chatId || fcmData.callId || Date.now().toString();
+    const uniqueKey = `${notificationType}-${notificationId}`;
 
-    // Determine notification content
-    let title = notification.title || 'ChatApp';
-    let body = notification.body || 'You have a new notification';
+    // Skip if we already showed this notification recently (within 5 seconds)
+    if (shownNotifications.has(uniqueKey)) {
+        console.log('[SW] Skipping duplicate notification:', uniqueKey);
+        return;
+    }
+
+    // Mark as shown (auto-cleanup after 5 seconds)
+    shownNotifications.add(uniqueKey);
+    setTimeout(() => shownNotifications.delete(uniqueKey), 5000);
+
+    // Build notification based on type
+    let title = 'ChatApp';
     let options = {
-        body: body,
         icon: '/pwa-icons/icon-192x192.png',
         badge: '/pwa-icons/icon-96x96.png',
-        vibrate: [200, 100, 200],
-        data: data,
-        requireInteraction: data.type === 'call',
-        tag: data.type === 'message' ? `message-${data.chatId || 'default'}` :
-            data.type === 'call' ? `call-${data.callId || 'default'}` :
-                `notification-${Date.now()}`
+        data: fcmData,
+        tag: uniqueKey, // Using tag prevents duplicate system notifications
+        renotify: true
     };
 
-    // Customize based on notification type
-    if (data.type === 'message') {
-        title = data.senderName || title;
-        options.body = data.messageText || body;
-        options.renotify = true;
-    } else if (data.type === 'call') {
-        title = 'Incoming Call';
-        options.body = `${data.callerName || 'Someone'} is calling...`;
-        options.vibrate = [300, 100, 300, 100, 300];
-        options.requireInteraction = true;
-    } else if (data.type === 'missed_call') {
-        title = 'Missed Call';
-        options.body = `Missed call from ${data.callerName || 'Unknown'}`;
+    if (notificationType === 'message') {
+        // Message notification
+        title = fcmData.senderName || fcmNotification.title || 'New Message';
+        options.body = fcmData.messageText || fcmNotification.body || 'You have a new message';
+        options.vibrate = [200, 100, 200];
+
+    } else if (notificationType === 'call') {
+        // Incoming call notification - Make it distinctive!
+        title = '📞 Incoming Call';
+        options.body = `${fcmData.callerName || 'Someone'} is calling you...`;
+        options.vibrate = [500, 200, 500, 200, 500, 200, 500]; // Long vibration pattern
+        options.requireInteraction = true; // Keep visible until user interacts
+        options.silent = false;
+        options.actions = [
+            { action: 'answer', title: '✅ Answer', icon: '/pwa-icons/icon-96x96.png' },
+            { action: 'decline', title: '❌ Decline' }
+        ];
+        // Use a sound-indicating icon for calls
+        options.icon = '/pwa-icons/icon-192x192.png';
+
+    } else if (notificationType === 'missed_call') {
+        // Missed call notification
+        title = '📵 Missed Call';
+        options.body = `You missed a call from ${fcmData.callerName || 'Unknown'}`;
+        options.vibrate = [200, 100, 200];
+
+    } else {
+        // Generic notification - use FCM payload directly
+        title = fcmNotification.title || 'ChatApp';
+        options.body = fcmNotification.body || 'You have a new notification';
+        options.vibrate = [200, 100, 200];
     }
 
-    // CRITICAL: For iOS Safari PWA, we MUST show a notification
-    // or the push permission may be revoked
+    console.log('[SW] Showing notification:', title, options.body);
+
     event.waitUntil(
         self.registration.showNotification(title, options)
     );
@@ -166,11 +145,14 @@ self.addEventListener('notificationclick', (event) => {
         urlToOpen = `/?chat=${data.chatId}`;
     } else if (data.type === 'call') {
         if (action === 'decline') {
-            // For decline, we could post message to client, but for now just open app
+            // User declined - just open app
             urlToOpen = '/';
-        } else {
-            // Answer or click - open app to handle call
+        } else if (action === 'answer') {
+            // User wants to answer
             urlToOpen = `/?call=${data.callId}&action=answer`;
+        } else {
+            // Clicked notification body - open to handle call
+            urlToOpen = `/?call=${data.callId}`;
         }
     }
 
@@ -314,4 +296,3 @@ self.addEventListener('fetch', (event) => {
 });
 
 console.log('[SW] Firebase messaging service worker with PWA support loaded');
-

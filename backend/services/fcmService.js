@@ -34,27 +34,28 @@ const sendToUser = async (userId, notification, data = {}) => {
             return acc;
         }, {});
 
-        // Build the message with platform-specific configurations
-        // This is critical for iOS Safari PWA push notifications!
+        // Add notification info to data so service worker can display it
+        stringData.notificationTitle = notification.title;
+        stringData.notificationBody = notification.body;
+
+        // Build the message - DATA ONLY (no top-level notification)
+        // This prevents the browser from auto-showing a notification
+        // Our service worker handles the display to prevent duplicates
         const message = {
-            notification: {
-                title: notification.title,
-                body: notification.body,
-            },
+            // NO top-level 'notification' object - this is intentional!
+            // Including it causes the browser to auto-show a notification
             data: stringData,
             // Web Push configuration (for PWAs including iOS Safari)
             webpush: {
+                // Notification details for web push
                 notification: {
                     title: notification.title,
                     body: notification.body,
                     icon: '/pwa-icons/icon-192x192.png',
                     badge: '/pwa-icons/icon-96x96.png',
-                    vibrate: [200, 100, 200],
-                    requireInteraction: data.type === 'call',
                     tag: data.type === 'message' ? `message-${data.chatId}` :
-                        data.type === 'call' ? `call-${data.callId}` : 'notification',
-                    renotify: true,
-                    data: stringData
+                        data.type === 'call' ? `call-${data.callId}` :
+                            `notification-${Date.now()}`
                 },
                 fcmOptions: {
                     link: '/'
@@ -64,7 +65,7 @@ const sendToUser = async (userId, notification, data = {}) => {
                     'TTL': '86400'
                 }
             },
-            // APNS configuration (for iOS devices including Safari PWA)
+            // APNS configuration (for iOS devices)
             apns: {
                 headers: {
                     'apns-priority': '10',
@@ -78,21 +79,15 @@ const sendToUser = async (userId, notification, data = {}) => {
                         },
                         badge: 1,
                         sound: 'default',
-                        'mutable-content': 1,
-                        'content-available': 1
-                    },
-                    ...stringData
+                        'mutable-content': 1
+                    }
                 }
             },
-            // Android configuration
+            // Android configuration  
             android: {
                 priority: 'high',
-                notification: {
-                    icon: 'ic_notification',
-                    color: '#3b82f6',
-                    sound: 'default',
-                    channelId: 'chat_messages'
-                }
+                // Use data message for Android too (no notification object)
+                // This gives our app full control
             },
             tokens
         };
