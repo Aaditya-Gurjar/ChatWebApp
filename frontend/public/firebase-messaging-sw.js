@@ -2,7 +2,7 @@
 // This handles background push notifications and PWA caching
 
 // PWA Cache Configuration
-const CACHE_VERSION = 'v2';  // Incremented to force update
+const CACHE_VERSION = 'v3';  // Incremented to force update
 const CACHE_NAME = `chatapp-cache-${CACHE_VERSION}`;
 
 // Resources to cache for offline access
@@ -35,77 +35,55 @@ firebase.initializeApp(firebaseConfig);
 const messaging = firebase.messaging();
 
 // ============================================
-// PUSH EVENT HANDLER
+// FIREBASE BACKGROUND MESSAGE HANDLER
 // ============================================
-// This is the ONLY handler we use. The backend sends notifications with `tag`
-// which prevents duplicate notifications at the system level.
-// We customize the notification display here.
+// This is the RELIABLE handler for iOS Safari PWA
+// The tag property in webpush.notification (set by backend) prevents duplicates
 
-self.addEventListener('push', (event) => {
-    console.log('[SW] Push event received');
+messaging.onBackgroundMessage((payload) => {
+    console.log('[SW] Background message received:', payload);
 
-    if (!event.data) {
-        console.log('[SW] No data in push event');
-        return;
-    }
-
-    let payload = {};
-    try {
-        payload = event.data.json();
-        console.log('[SW] Push payload received');
-    } catch (e) {
-        console.error('[SW] Could not parse push data:', e);
-        return;
-    }
-
-    // FCM sends data in the 'data' field and notification info in 'notification'
-    const fcmNotification = payload.notification || {};
-    const fcmData = payload.data || {};
+    // Extract data from payload
+    const data = payload.data || {};
+    const notification = payload.notification || {};
 
     // Determine notification type
-    const notificationType = fcmData.type || 'notification';
+    const notificationType = data.type || 'notification';
 
-    // Create tag (same format as backend for consistency)
-    const tag = `${notificationType}-${fcmData.chatId || fcmData.callId || Date.now()}`;
+    // Create tag for deduplication (matches backend)
+    const tag = `${notificationType}-${data.chatId || data.callId || Date.now()}`;
 
-    // Build notification options
-    let title = fcmNotification.title || 'ChatApp';
+    // Build notification
+    let title = notification.title || 'ChatApp';
     let options = {
-        body: fcmNotification.body || 'You have a new notification',
+        body: notification.body || 'You have a new notification',
         icon: '/pwa-icons/icon-192x192.png',
         badge: '/pwa-icons/icon-96x96.png',
         tag: tag,  // CRITICAL: prevents duplicate notifications
-        renotify: true,  // Vibrate even if replacing existing notification
-        data: fcmData,
+        renotify: true,
+        data: data,
         vibrate: [200, 100, 200]
     };
 
-    // Customize based on notification type
+    // Customize based on type
     if (notificationType === 'call') {
-        // Incoming call - make it distinctive
-        title = fcmNotification.title || '📞 Incoming Call';
-        options.body = fcmNotification.body || `${fcmData.callerName || 'Someone'} is calling...`;
-        options.requireInteraction = true;  // Keep visible until user interacts
-        options.vibrate = [500, 200, 500, 200, 500];  // Longer vibration
+        title = notification.title || '📞 Incoming Call';
+        options.body = notification.body || `${data.callerName || 'Someone'} is calling...`;
+        options.requireInteraction = true;
+        options.vibrate = [500, 200, 500, 200, 500];
         options.actions = [
             { action: 'answer', title: '✅ Answer' },
             { action: 'decline', title: '❌ Decline' }
         ];
     } else if (notificationType === 'missed_call') {
-        title = fcmNotification.title || '📵 Missed Call';
-        options.body = fcmNotification.body || `Missed call from ${fcmData.callerName || 'Unknown'}`;
+        title = notification.title || '📵 Missed Call';
     } else if (notificationType === 'message') {
-        // Message notification - use sender name as title
-        title = fcmData.senderName || fcmNotification.title || 'New Message';
-        options.body = fcmData.messageText || fcmNotification.body || 'You have a new message';
+        title = data.senderName || notification.title || 'New Message';
+        options.body = data.messageText || notification.body || 'You have a new message';
     }
 
     console.log('[SW] Showing notification:', title);
-
-    // Show the notification
-    event.waitUntil(
-        self.registration.showNotification(title, options)
-    );
+    return self.registration.showNotification(title, options);
 });
 
 // ============================================
@@ -121,22 +99,17 @@ self.addEventListener('notificationclick', (event) => {
 
     notification.close();
 
-    // Determine URL to open
     let urlToOpen = '/';
-
     if (data.type === 'message' && data.chatId) {
         urlToOpen = `/?chat=${data.chatId}`;
     } else if (data.type === 'call') {
         if (action === 'answer') {
             urlToOpen = `/?call=${data.callId}&action=answer`;
-        } else if (action === 'decline') {
-            urlToOpen = '/';
         } else {
             urlToOpen = `/?call=${data.callId}`;
         }
     }
 
-    // Open or focus the app
     event.waitUntil(
         clients.matchAll({ type: 'window', includeUncontrolled: true })
             .then((windowClients) => {
@@ -162,7 +135,7 @@ self.addEventListener('notificationclick', (event) => {
 // ============================================
 
 self.addEventListener('install', (event) => {
-    console.log('[SW] Installing service worker v2...');
+    console.log('[SW] Installing service worker v3...');
 
     event.waitUntil(
         caches.open(CACHE_NAME)
@@ -181,7 +154,7 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('activate', (event) => {
-    console.log('[SW] Activating service worker v2...');
+    console.log('[SW] Activating service worker v3...');
 
     event.waitUntil(
         caches.keys()
@@ -248,4 +221,4 @@ self.addEventListener('fetch', (event) => {
     );
 });
 
-console.log('[SW] Firebase messaging service worker v2 loaded');
+console.log('[SW] Firebase messaging service worker v3 loaded');
