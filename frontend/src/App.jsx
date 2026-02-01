@@ -18,6 +18,7 @@ import CallWindow from "./components/call/CallWindow";
 import IncomingCallModal from "./components/call/IncomingCallModal";
 import { CallProvider } from "./context/CallContext";
 import { useFCM } from "./hooks/useFCM";
+import InstallPrompt from "./components/InstallPrompt";
 // import GroupChatBox from "./components/GroupChatBox";
 
 const Applayout = () => {
@@ -81,6 +82,7 @@ const Applayout = () => {
             {isLoading && <Loading />}
             <CallWindow />
             <IncomingCallModal />
+            <InstallPrompt />
         </div>
     );
 };

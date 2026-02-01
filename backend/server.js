@@ -80,6 +80,10 @@ const io = new Server(server, {
 	cors: corsOptions,
 });
 
+// Track online users (userId -> Set of socket IDs)
+// This is used to determine if user is actively connected (don't send FCM if they're online)
+const onlineUsers = new Map();
+
 // Socket connection
 io.on("connection", (socket) => {
 	console.log("Connected to socket.io:", socket.id);
@@ -89,7 +93,15 @@ io.on("connection", (socket) => {
 		if (!socket.hasJoined) {
 			socket.join(userId);
 			socket.hasJoined = true;
-			console.log(`✅ User joined room: ${userId} (socket: ${socket.id})`);
+			socket.userId = userId; // Store userId on socket for disconnect tracking
+
+			// Track this user as online
+			if (!onlineUsers.has(userId)) {
+				onlineUsers.set(userId, new Set());
+			}
+			onlineUsers.get(userId).add(socket.id);
+			console.log(`✅ User joined room: ${userId} (socket: ${socket.id}), online sockets: ${onlineUsers.get(userId).size}`);
+
 			socket.emit("connected");
 			console.log(`✅ Sent 'connected' event to user: ${userId}`);
 		} else {
@@ -117,15 +129,24 @@ io.on("connection", (socket) => {
 			console.log('FCM: Extracted senderName:', senderName);
 			console.log('FCM: Message text:', newMessageReceived.message || newMessageReceived.content);
 
-			// Send FCM push notification for offline users
-			sendMessageNotification(user._id, {
-				senderName: senderName,
-				senderImage: sender?.image || '',
-				messageText: newMessageReceived.message || newMessageReceived.content || 'New message',
-				chatId: chat._id,
-				chatName: chat.chatName || '',
-				isGroup: chat.isGroupChat || false
-			}).catch(err => console.log('FCM message notification error:', err));
+			// Only send FCM push notification if recipient is NOT currently online
+			// (if they're online, they'll receive via socket.io and see the message directly)
+			const isRecipientOnline = onlineUsers.has(user._id);
+			console.log(`FCM: User ${user._id} online status:`, isRecipientOnline);
+
+			if (!isRecipientOnline) {
+				// Send FCM push notification for offline users
+				sendMessageNotification(user._id, {
+					senderName: senderName,
+					senderImage: sender?.image || '',
+					messageText: newMessageReceived.message || newMessageReceived.content || 'New message',
+					chatId: chat._id,
+					chatName: chat.chatName || '',
+					isGroup: chat.isGroupChat || false
+				}).catch(err => console.log('FCM message notification error:', err));
+			} else {
+				console.log(`FCM: Skipping notification for ${user._id} - user is online`);
+			}
 		});
 	};
 
@@ -238,6 +259,18 @@ io.on("connection", (socket) => {
 
 	socket.on("disconnect", () => {
 		console.log("User disconnected:", socket.id);
+
+		// Remove from online users tracking
+		if (socket.userId && onlineUsers.has(socket.userId)) {
+			onlineUsers.get(socket.userId).delete(socket.id);
+			if (onlineUsers.get(socket.userId).size === 0) {
+				onlineUsers.delete(socket.userId);
+				console.log(`📴 User ${socket.userId} is now fully offline`);
+			} else {
+				console.log(`📱 User ${socket.userId} still has ${onlineUsers.get(socket.userId).size} active socket(s)`);
+			}
+		}
+
 		socket.off("setup", setupHandler);
 		socket.off("new message", newMessageHandler);
 		socket.off("join chat", joinChatHandler);
